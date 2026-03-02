@@ -4,63 +4,191 @@
   .sensor-row { display: flex; align-items: center; gap: 0.4em; }
   .sensor-icon { font-size: 1.6em; line-height: 1; }
   .title_bar { background: none !important; border-top: none !important; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; height: calc(100% - 36px); overflow: hidden; }
+  .split__left { border-right: 1px solid #ccc; overflow: hidden; }
+  .split__right { display: flex; flex-direction: column; padding: 8px; overflow: hidden; }
+  .chart-label { font-size: 11px; font-weight: 600; margin: 0 0 4px 0; }
 </style>
+
+{% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
+
+{% capture areas_html %}
+  {% if areas == empty %}
+    <div class="item">
+      <div class="content">
+        <span class="title">No climate sensors found</span>
+        <span class="description">Assign sensors to areas in Home Assistant.</span>
+      </div>
+    </div>
+  {% else %}
+    <div class="columns">
+      {% for area in areas %}
+      <div class="column">
+        <div class="item">
+          <div class="content">
+            <span class="title title--small">{{ area.area }}</span>
+          </div>
+        </div>
+        {% for sensor in area.sensors %}
+        {% assign sensor_icon = 'mdi-gauge' %}
+        {% for pair in icon_map %}
+          {% assign parts = pair | split: ':' %}
+          {% if parts[0] == sensor.device_class %}{% assign sensor_icon = parts[1] %}{% break %}{% endif %}
+        {% endfor %}
+        <div class="item">
+          <div class="content">
+            <div class="sensor-row">
+              <span class="mdi {{ sensor_icon }} sensor-icon"></span>
+              <span class="value value--tnums sensor-value" data-value-fit="true">{{ sensor.state }}{{ sensor.unit }}</span>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endcapture %}
 
 <div class="screen">
   <div class="view view--full">
-    <div class="layout">
 
-      {% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
+    {% if chart %}
 
-      {% if areas == empty %}
+    <div class="split">
+      <div class="split__left">
+        {{ areas_html }}
+      </div>
+      <div class="split__right">
+        <p class="chart-label">{{ chart.label }} ({{ chart.unit }})</p>
+        <div id="sensor-chart" style="flex: 1; min-height: 0;"></div>
 
-        <div class="item">
-          <div class="content">
-            <span class="title">No climate sensors found</span>
-            <span class="description">Assign sensors to areas in Home Assistant, then trigger the integration.</span>
-          </div>
-        </div>
+        <script src="https://code.highcharts.com/highcharts.js"></script>
+        {% if chart.type == "7day" %}
+        <script src="https://code.highcharts.com/highcharts-more.js"></script>
+        {% endif %}
 
-      {% else %}
+        <script>
+        (function () {
+          var commonOpts = {
+            animation: false,
+            backgroundColor: 'transparent',
+            margin: [8, 8, 28, 36],
+            style: { fontFamily: 'inherit' }
+          };
+          var axisStyle = { style: { fontSize: '10px', color: '#333' } };
+          var credits = { enabled: false };
+          var legend  = { enabled: false };
 
-        <div class="columns">
-          {% for area in areas %}
-          <div class="column">
+          {% if chart.type == "24h" %}
 
-            <div class="item">
-              <div class="content">
-                <span class="title title--small">{{ area.area }}</span>
-              </div>
-            </div>
+          Highcharts.chart('sensor-chart', {
+            chart: Object.assign({ type: 'area' }, commonOpts),
+            title: { text: null },
+            credits: credits,
+            legend: legend,
+            xAxis: {
+              categories: [{% for p in chart.points %}"{{ p.t }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+              tickInterval: {% if chart.points.size > 18 %}6{% elsif chart.points.size > 12 %}4{% elsif chart.points.size > 6 %}2{% else %}1{% endif %},
+              labels: axisStyle,
+              lineColor: '#ccc',
+              tickColor: '#ccc'
+            },
+            yAxis: {
+              title: { text: null },
+              labels: axisStyle,
+              gridLineColor: '#eee'
+            },
+            series: [{
+              data: [{% for p in chart.points %}{{ p.v }}{% unless forloop.last %},{% endunless %}{% endfor %}],
+              color: '#000',
+              fillOpacity: 0.1,
+              lineWidth: 2,
+              marker: { enabled: false }
+            }],
+            tooltip: { valueSuffix: ' {{ chart.unit }}', headerFormat: '<b>{point.key}</b><br/>' }
+          });
 
-            {% for sensor in area.sensors %}
-            {% assign sensor_icon = 'mdi-gauge' %}
-            {% for pair in icon_map %}
-              {% assign parts = pair | split: ':' %}
-              {% if parts[0] == sensor.device_class %}
-                {% assign sensor_icon = parts[1] %}
-                {% break %}
-              {% endif %}
-            {% endfor %}
+          {% elsif chart.type == "7day" and chart.mode == "minmax" %}
 
-            <div class="item">
-              <div class="content">
-                <div class="sensor-row">
-                  <span class="mdi {{ sensor_icon }} sensor-icon"></span>
-                  <span class="value value--tnums sensor-value" data-value-fit="true">{{ sensor.state }}{{ sensor.unit }}</span>
-                </div>
-              </div>
-            </div>
+          Highcharts.chart('sensor-chart', {
+            chart: commonOpts,
+            title: { text: null },
+            credits: credits,
+            legend: legend,
+            xAxis: {
+              categories: [{% for d in chart.days %}"{{ d.t }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+              labels: axisStyle,
+              lineColor: '#ccc',
+              tickColor: '#ccc'
+            },
+            yAxis: {
+              title: { text: null },
+              labels: axisStyle,
+              gridLineColor: '#eee'
+            },
+            series: [
+              {
+                type: 'arearange',
+                name: 'Range',
+                data: [{% for d in chart.days %}[{{ d.min }}, {{ d.max }}]{% unless forloop.last %},{% endunless %}{% endfor %}],
+                color: '#000',
+                fillOpacity: 0.15,
+                lineWidth: 1,
+                marker: { enabled: false }
+              },
+              {
+                type: 'spline',
+                name: 'Avg',
+                data: [{% for d in chart.days %}{{ d.avg }}{% unless forloop.last %},{% endunless %}{% endfor %}],
+                color: '#000',
+                lineWidth: 2,
+                marker: { enabled: false }
+              }
+            ],
+            tooltip: { valueSuffix: ' {{ chart.unit }}', shared: true }
+          });
 
-            {% endfor %}
+          {% elsif chart.type == "7day" %}
 
-          </div>
-          {% endfor %}
-        </div>
+          Highcharts.chart('sensor-chart', {
+            chart: Object.assign({ type: 'column' }, commonOpts),
+            title: { text: null },
+            credits: credits,
+            legend: legend,
+            xAxis: {
+              categories: [{% for d in chart.days %}"{{ d.t }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+              labels: axisStyle,
+              lineColor: '#ccc',
+              tickColor: '#ccc'
+            },
+            yAxis: {
+              title: { text: null },
+              labels: axisStyle,
+              gridLineColor: '#eee'
+            },
+            series: [{
+              data: [{% for d in chart.days %}{{ d.avg }}{% unless forloop.last %},{% endunless %}{% endfor %}],
+              color: '#000',
+              borderRadius: 2
+            }],
+            tooltip: { valueSuffix: ' {{ chart.unit }}' }
+          });
 
-      {% endif %}
-
+          {% endif %}
+        }());
+        </script>
+      </div>
     </div>
+
+    {% else %}
+
+    <div class="layout">
+      {{ areas_html }}
+    </div>
+
+    {% endif %}
+
     <div class="title_bar">
       <span class="instance">last updated at {{ last_updated }}</span>
     </div>
