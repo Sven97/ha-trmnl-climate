@@ -1,8 +1,6 @@
 <style>
   @import url('https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css');
-  .sensor-row { display: flex; align-items: center; gap: 0.3em; }
-  .title_bar  { background: none !important; border-top: none !important; }
-  /* right-side chart panel: stack sections vertically */
+  .title_bar { background: none !important; border-top: none !important; }
   .chart-panel { display: flex; flex-direction: column; height: 100%; }
   .chart-section { flex: 1; padding: 6px 8px; min-height: 0; }
   .chart-section + .chart-section { border-top: 1px solid #ccc; }
@@ -10,84 +8,107 @@
 
 {% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
 
-{% comment %} Reusable areas block — columns auto-distributes and handles overflow {% endcomment %}
-{% capture areas_block %}
-{% if areas == empty %}
-<div class="item">
-  <div class="content">
-    <span class="title">No climate sensors found</span>
-    <span class="description">Assign sensors to areas in Home Assistant.</span>
-  </div>
-</div>
-{% else %}
-<div class="columns">
-  {% for area in areas %}
-  <div class="column">
-    <div class="item">
-      <div class="content">
-        <span class="title title--small">{{ area.area }}</span>
-      </div>
-    </div>
-    {% for sensor in area.sensors %}
-    {% assign sensor_icon = 'mdi-gauge' %}
-    {% for pair in icon_map %}
-      {% assign kv = pair | split: ':' %}
-      {% if kv[0] == sensor.device_class %}{% assign sensor_icon = kv[1] %}{% break %}{% endif %}
-    {% endfor %}
-    <div class="item">
-      <div class="content">
-        <div class="sensor-row">
-          <span class="mdi {{ sensor_icon }}"></span>
-          <span class="value value--tnums">{{ sensor.state }}{{ sensor.unit }}</span>
-        </div>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-{% endcapture %}
-
-{% comment %} Compute chart height: full panel for one chart, split for two {% endcomment %}
 {% if chart_1d and chart_7d %}{% assign chart_h = 190 %}{% else %}{% assign chart_h = 405 %}{% endif %}
 
 <div class="screen">
   <div class="view view--full">
 
-    {% if chart_1d or chart_7d %}
+    {% if areas == empty %}
 
+    <div class="layout layout--center">
+      <div class="item">
+        <div class="content">
+          <span class="title">No climate sensors found</span>
+          <span class="description">Assign sensors to areas in Home Assistant.</span>
+        </div>
+      </div>
+    </div>
+
+    {% elsif chart_1d or chart_7d %}
+
+    {% comment %} Split view: areas grid left, charts right {% endcomment %}
     <div class="layout layout--stretch">
       <div class="grid grid--cols-2">
 
+        {% comment %} Left: areas as a 2-column card grid {% endcomment %}
         <div style="border-right: 1px solid #ccc; overflow: hidden;">
-          {{ areas_block }}
+          <div class="grid grid--cols-2">
+            {% for area in areas %}
+            <div>
+              <div class="item">
+                <div class="content">
+                  <span class="label">{{ area.area }}</span>
+                </div>
+              </div>
+              {% for sensor in area.sensors %}
+              {% assign sensor_icon = 'mdi-gauge' %}
+              {% for pair in icon_map %}
+                {% assign kv = pair | split: ':' %}
+                {% if kv[0] == sensor.device_class %}{% assign sensor_icon = kv[1] %}{% break %}{% endif %}
+              {% endfor %}
+              <div class="item">
+                <div class="meta">
+                  <span class="mdi {{ sensor_icon }}"></span>
+                </div>
+                <div class="content">
+                  <span class="value value--tnums">{{ sensor.state }}{{ sensor.unit }}</span>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
         </div>
 
+        {% comment %} Right: history chart(s) {% endcomment %}
         <div class="chart-panel">
-
           {% if chart_1d %}
           <div class="chart-section">
             <span class="label">{{ chart_1d.label }} · 24 h ({{ chart_1d.unit }})</span>
             <div id="chart-1d"></div>
           </div>
           {% endif %}
-
           {% if chart_7d %}
           <div class="chart-section">
             <span class="label">{{ chart_7d.label }} · 7 d ({{ chart_7d.unit }})</span>
             <div id="chart-7d"></div>
           </div>
           {% endif %}
-
         </div>
+
       </div>
     </div>
 
     {% else %}
 
+    {% comment %} Full-width view: columns auto-distributes areas {% endcomment %}
     <div class="layout">
-      {{ areas_block }}
+      <div class="columns">
+        {% for area in areas %}
+        <div class="column">
+          <div class="item">
+            <div class="content">
+              <span class="label">{{ area.area }}</span>
+            </div>
+          </div>
+          {% for sensor in area.sensors %}
+          {% assign sensor_icon = 'mdi-gauge' %}
+          {% for pair in icon_map %}
+            {% assign kv = pair | split: ':' %}
+            {% if kv[0] == sensor.device_class %}{% assign sensor_icon = kv[1] %}{% break %}{% endif %}
+          {% endfor %}
+          <div class="item">
+            <div class="meta">
+              <span class="mdi {{ sensor_icon }}"></span>
+            </div>
+            <div class="content">
+              <span class="value value--tnums">{{ sensor.state }}{{ sensor.unit }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
     </div>
 
     {% endif %}
@@ -114,10 +135,7 @@
   var axisLabel = { style: { fontSize: '9px', color: '#000' } };
 
   var plotOptions = {
-    series: {
-      animation: false,
-      enableMouseTracking: false
-    }
+    series: { animation: false, enableMouseTracking: false }
   };
 
   {% if chart_1d %}
