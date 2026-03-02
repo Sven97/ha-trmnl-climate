@@ -7,8 +7,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_SHOW_1DAY,
-    CONF_SHOW_7DAY,
+    CONF_SHOW_CHART,
     CONF_WEBHOOK_URL,
     DOMAIN,
 )
@@ -60,7 +59,7 @@ class TrmnlClimateConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
-    """Options flow for chart configuration."""
+    """Options flow — single toggle to enable 24h history charts."""
 
     def __init__(self, config_entry) -> None:
         self._entry = config_entry
@@ -69,18 +68,12 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        cur = self._entry.options
-
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
                 vol.Required(
-                    CONF_SHOW_1DAY,
-                    default=cur.get(CONF_SHOW_1DAY, False),
-                ): selector.BooleanSelector(),
-                vol.Required(
-                    CONF_SHOW_7DAY,
-                    default=cur.get(CONF_SHOW_7DAY, False),
+                    CONF_SHOW_CHART,
+                    default=self._entry.options.get(CONF_SHOW_CHART, False),
                 ): selector.BooleanSelector(),
             }),
         )

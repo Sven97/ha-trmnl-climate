@@ -21,10 +21,9 @@
     "step": {
       "init": {
         "title": "Chart Settings",
-        "description": "Show sensor history charts alongside current values. Requires the HA Recorder integration.",
+        "description": "Show 24-hour sensor history charts alongside current values. Requires the HA Recorder integration.",
         "data": {
-          "show_1day": "Show 24h history chart",
-          "show_7day": "Show 7-day history chart"
+          "show_chart": "Show 24h history charts"
         }
       }
     }

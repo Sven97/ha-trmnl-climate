@@ -16,11 +16,10 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CHART_SENSOR_LABELS,
-    CHART_SENSOR_PRIORITY,
+    CHART_SENSOR_ORDER,
+    CHART_TYPE_PREFERRED,
     CLIMATE_DEVICE_CLASSES,
-    CONF_SHOW_1DAY,
-    CONF_SHOW_7DAY,
+    CONF_SHOW_CHART,
     CONF_WEBHOOK_URL,
     DOMAIN,
     PUSH_INTERVAL_MINUTES,
@@ -150,17 +149,17 @@ def _build_areas_data(hass: HomeAssistant) -> list[dict]:
 # Chart / history data
 # ---------------------------------------------------------------------------
 
-def _find_all_chart_entities(
+def _find_chart_entities_by_class(
     hass: HomeAssistant,
-    device_class: str,
-) -> list[dict]:
-    """Return one {entity_id, area_name, unit} per area for the given device class."""
+) -> dict[str, list[dict]]:
+    """Return {device_class: [{entity_id, area_name, unit}]} for all classes with data."""
     area_reg = ar.async_get(hass)
     entity_reg = er.async_get(hass)
     device_reg = dr.async_get(hass)
 
-    seen_areas: set[str] = set()
-    results: list[dict] = []
+    # one entity per (device_class, area) pair
+    seen: dict[str, set[str]] = {}   # device_class -> set of area_ids already added
+    result: dict[str, list[dict]] = {}
 
     for entity in entity_reg.entities.values():
         if not entity.entity_id.startswith("sensor."):
@@ -171,7 +170,9 @@ def _find_all_chart_entities(
         state = hass.states.get(entity.entity_id)
         if state is None or state.state in ("unknown", "unavailable"):
             continue
-        if state.attributes.get("device_class") != device_class:
+
+        device_class = state.attributes.get("device_class")
+        if device_class not in CLIMATE_DEVICE_CLASSES:
             continue
 
         area_id = entity.area_id
@@ -180,53 +181,48 @@ def _find_all_chart_entities(
             if device:
                 area_id = device.area_id
 
-        if area_id is None or area_id in seen_areas:
+        if area_id is None:
             continue
 
         area = area_reg.async_get_area(area_id)
         if area is None:
             continue
 
-        seen_areas.add(area_id)
-        results.append({
+        seen.setdefault(device_class, set())
+        if area_id in seen[device_class]:
+            continue
+        seen[device_class].add(area_id)
+
+        result.setdefault(device_class, [])
+        result[device_class].append({
             "entity_id": entity.entity_id,
             "area_name": area.name,
             "unit": state.attributes.get("unit_of_measurement", ""),
         })
 
-    return sorted(results, key=lambda x: x["area_name"])
+    # Sort each class's entity list by area name for consistent ordering
+    for dc in result:
+        result[dc].sort(key=lambda x: x["area_name"])
 
-
-def _pick_device_class(hass: HomeAssistant) -> str | None:
-    """Return the highest-priority device class that has at least one sensor."""
-    entity_reg = er.async_get(hass)
-    for dc in CHART_SENSOR_PRIORITY:
-        for entity in entity_reg.entities.values():
-            if not entity.entity_id.startswith("sensor."):
-                continue
-            state = hass.states.get(entity.entity_id)
-            if state and state.attributes.get("device_class") == dc:
-                return dc
-    return None
+    return result
 
 
 def _build_aligned_series(
     states_map: dict,
     entities: list[dict],
-    bucket_key_fn,
-    max_buckets: int,
     start,
     tz,
 ) -> tuple[list[str], list[dict]]:
     """
-    Aggregate state history into time buckets.
+    Bucket 24h state history into hourly averages.
 
-    Returns (labels, series) where:
-    - labels: x-axis strings only for buckets that have data in ANY series
-    - series[i].data: values aligned to labels, None for missing buckets
+    Returns (labels, series):
+    - labels: HH:MM strings only for hours that have data in ANY series
+    - series[i].data: values aligned to labels, None for missing hours
     """
     entity_buckets: dict[str, dict[int, list[float]]] = {}
     all_keys: set[int] = set()
+    start_local = start.astimezone(tz)
 
     for e in entities:
         buckets: dict[int, list[float]] = defaultdict(list)
@@ -235,8 +231,8 @@ def _build_aligned_series(
                 v = float(s.state)
             except (ValueError, AttributeError):
                 continue
-            key = bucket_key_fn(s.last_changed.astimezone(tz), start.astimezone(tz))
-            if 0 <= key < max_buckets:
+            key = int((s.last_changed.astimezone(tz) - start_local).total_seconds() // 3600)
+            if 0 <= key < 24:
                 buckets[key].append(v)
                 all_keys.add(key)
         entity_buckets[e["entity_id"]] = buckets
@@ -245,18 +241,10 @@ def _build_aligned_series(
         return [], []
 
     sorted_keys = sorted(all_keys)
-    start_local = start.astimezone(tz)
-
-    if max_buckets == 24:
-        labels = [
-            (start_local + timedelta(hours=k)).strftime("%H:%M")
-            for k in sorted_keys
-        ]
-    else:
-        labels = [
-            _DAY_NAMES[(start_local + timedelta(days=k)).weekday()]
-            for k in sorted_keys
-        ]
+    labels = [
+        (start_local + timedelta(hours=k)).strftime("%H:%M")
+        for k in sorted_keys
+    ]
 
     series = []
     for e in entities:
@@ -271,20 +259,9 @@ def _build_aligned_series(
     return labels, series
 
 
-def _hour_key(dt_local, start_local) -> int:
-    return int((dt_local - start_local).total_seconds() // 3600)
-
-
-def _day_key(dt_local, start_local) -> int:
-    return int((dt_local - start_local).total_seconds() // 86400)
-
-
 async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
-    """Build chart_1d / chart_7d payloads from recorded state history."""
-    show_1d = options.get(CONF_SHOW_1DAY, False)
-    show_7d = options.get(CONF_SHOW_7DAY, False)
-
-    if not show_1d and not show_7d:
+    """Build charts array — one entry per device class that has 24h history."""
+    if not options.get(CONF_SHOW_CHART, False):
         return {}
 
     try:
@@ -294,49 +271,51 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         _LOGGER.debug("Recorder not available — chart data skipped")
         return {}
 
-    device_class = _pick_device_class(hass)
-    if not device_class:
+    entities_by_class = _find_chart_entities_by_class(hass)
+    if not entities_by_class:
         return {}
 
-    entities = _find_all_chart_entities(hass, device_class)
-    if not entities:
-        return {}
+    # Single recorder query for all entities across all device classes
+    all_entity_ids = [
+        e["entity_id"]
+        for entities in entities_by_class.values()
+        for e in entities
+    ]
 
-    entity_ids = [e["entity_id"] for e in entities]
-    label = CHART_SENSOR_LABELS.get(device_class, device_class.replace("_", " ").title())
-    unit = entities[0]["unit"]
     now = dt_util.now()
     tz = now.tzinfo
-    result: dict = {}
+    start = now - timedelta(hours=24)
 
     try:
-        if show_1d:
-            start = now - timedelta(hours=24)
-            states_map = await get_instance(hass).async_add_executor_job(
-                get_significant_states,
-                hass, start, now, entity_ids,
-                None, True, False, False, True,
-            )
-            labels, series = _build_aligned_series(
-                states_map, entities, _hour_key, 24, start, tz
-            )
-            if series:
-                result["chart_1d"] = {"label": label, "unit": unit, "labels": labels, "series": series}
-
-        if show_7d:
-            start = now - timedelta(days=7)
-            states_map = await get_instance(hass).async_add_executor_job(
-                get_significant_states,
-                hass, start, now, entity_ids,
-                None, True, False, False, True,
-            )
-            labels, series = _build_aligned_series(
-                states_map, entities, _day_key, 7, start, tz
-            )
-            if series:
-                result["chart_7d"] = {"label": label, "unit": unit, "labels": labels, "series": series}
-
+        states_map = await get_instance(hass).async_add_executor_job(
+            get_significant_states,
+            hass, start, now, all_entity_ids,
+            None, True, False, False, True,
+        )
     except Exception as err:
-        _LOGGER.warning("Failed to build chart data: %s", err)
+        _LOGGER.warning("Failed to fetch chart history: %s", err)
+        return {}
 
-    return result
+    charts = []
+    for device_class in CHART_SENSOR_ORDER:
+        entities = entities_by_class.get(device_class)
+        if not entities:
+            continue
+
+        labels, series = _build_aligned_series(states_map, entities, start, tz)
+        if not series:
+            continue
+
+        # Use areaspline for single-series air quality charts; spline for multi-series
+        # (overlapping fills on e-ink are unreadable with multiple series)
+        preferred = CHART_TYPE_PREFERRED.get(device_class, "spline")
+        chart_type = preferred if len(series) == 1 else "spline"
+
+        charts.append({
+            "unit": entities[0]["unit"],
+            "chart_type": chart_type,
+            "labels": labels,
+            "series": series,
+        })
+
+    return {"charts": charts} if charts else {}

@@ -1,15 +1,17 @@
 <style>
   @import url('https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css');
-  .title_bar { background: none !important; border-top: none !important; }
   .item .meta { background: none !important; box-shadow: none !important; }
+  .title_bar  { background: none !important; border-top: none !important; }
   .chart-panel { display: flex; flex-direction: column; height: 100%; }
-  .chart-section { flex: 1; padding: 6px 8px; min-height: 0; }
+  .chart-section { flex: 1; min-height: 0; }
   .chart-section + .chart-section { border-top: 1px solid #ccc; }
 </style>
 
 {% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
 
-{% if chart_1d and chart_7d %}{% assign chart_h = 190 %}{% else %}{% assign chart_h = 405 %}{% endif %}
+{% comment %} Dynamic chart height based on number of charts {% endcomment %}
+{% assign n = charts.size %}
+{% if n <= 1 %}{% assign chart_h = 420 %}{% elsif n == 2 %}{% assign chart_h = 205 %}{% elsif n == 3 %}{% assign chart_h = 134 %}{% elsif n == 4 %}{% assign chart_h = 100 %}{% else %}{% assign chart_h = 84 %}{% endif %}
 
 <div class="screen">
   <div class="view view--full">
@@ -25,14 +27,14 @@
       </div>
     </div>
 
-    {% elsif chart_1d or chart_7d %}
+    {% elsif charts.size > 0 %}
 
-    {% comment %} Split view: areas grid left, charts right {% endcomment %}
+    {% comment %} Split view: areas left (centered), charts right {% endcomment %}
     <div class="layout layout--stretch">
       <div class="grid grid--cols-2">
 
-        {% comment %} Left: areas as a 2-column card grid {% endcomment %}
-        <div style="border-right: 1px solid #ccc; overflow: hidden;">
+        {% comment %} Left: area cards vertically centered {% endcomment %}
+        <div class="col col--center" style="border-right: 1px solid #ccc; overflow: hidden;">
           <div class="grid grid--cols-2">
             {% for area in areas %}
             <div>
@@ -61,20 +63,13 @@
           </div>
         </div>
 
-        {% comment %} Right: history chart(s) {% endcomment %}
+        {% comment %} Right: one chart section per sensor type {% endcomment %}
         <div class="chart-panel">
-          {% if chart_1d %}
+          {% for chart in charts %}
           <div class="chart-section">
-            <span class="label">{{ chart_1d.label }} · 24 h ({{ chart_1d.unit }})</span>
-            <div id="chart-1d"></div>
+            <div id="chart-{{ forloop.index }}"></div>
           </div>
-          {% endif %}
-          {% if chart_7d %}
-          <div class="chart-section">
-            <span class="label">{{ chart_7d.label }} · 7 d ({{ chart_7d.unit }})</span>
-            <div id="chart-7d"></div>
-          </div>
-          {% endif %}
+          {% endfor %}
         </div>
 
       </div>
@@ -120,7 +115,7 @@
   </div>
 </div>
 
-{% if chart_1d or chart_7d %}
+{% if charts.size > 0 %}
 <script src="https://trmnl.com/js/highcharts/12.3.0/highcharts.js"></script>
 <script>
 (function () {
@@ -129,38 +124,41 @@
   var baseChart = {
     animation: false,
     backgroundColor: 'transparent',
-    margin: [4, 8, 24, 36],
+    margin: [2, 8, 20, 38],
     style: { fontFamily: 'inherit' }
   };
 
-  var axisLabel = { style: { fontSize: '9px', color: '#000' } };
+  var axisLabel = { style: { fontSize: '8px', color: '#000' } };
 
   var plotOptions = {
     series: { animation: false, enableMouseTracking: false }
   };
 
-  {% if chart_1d %}
-  Highcharts.chart('chart-1d', {
-    chart: Object.assign({ type: 'line', height: {{ chart_h }} }, baseChart),
+  {% for chart in charts %}
+  Highcharts.chart('chart-{{ forloop.index }}', {
+    chart: Object.assign({ type: '{{ chart.chart_type }}', height: {{ chart_h }} }, baseChart),
     title:   { text: null },
     credits: { enabled: false },
     tooltip: { enabled: false },
-    legend:  { enabled: true, itemStyle: { fontSize: '8px', fontWeight: 'normal', color: '#000' } },
+    legend:  {
+      enabled: {% if chart.series.size > 1 %}true{% else %}false{% endif %},
+      itemStyle: { fontSize: '7px', fontWeight: 'normal', color: '#000' }
+    },
     xAxis: {
-      categories: [{% for l in chart_1d.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
-      tickPixelInterval: 80,
+      categories: [{% for l in chart.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+      tickPixelInterval: 60,
       labels: axisLabel,
       lineColor: '#ccc',
       tickColor: '#ccc'
     },
     yAxis: {
       title: { text: null },
-      labels: axisLabel,
+      labels: Object.assign({ format: '{value}{{ chart.unit }}' }, axisLabel),
       gridLineDashStyle: 'shortdot'
     },
-    plotOptions: plotOptions,
+    plotOptions: {% if chart.chart_type == 'areaspline' %}Object.assign({ areaspline: { fillOpacity: 0.12 } }, plotOptions){% else %}plotOptions{% endif %},
     series: [
-      {% for s in chart_1d.series %}
+      {% for s in chart.series %}
       {
         name: "{{ s.label }}",
         data: [{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}],
@@ -173,42 +171,7 @@
       {% endfor %}
     ]
   });
-  {% endif %}
-
-  {% if chart_7d %}
-  Highcharts.chart('chart-7d', {
-    chart: Object.assign({ type: 'line', height: {{ chart_h }} }, baseChart),
-    title:   { text: null },
-    credits: { enabled: false },
-    tooltip: { enabled: false },
-    legend:  { enabled: true, itemStyle: { fontSize: '8px', fontWeight: 'normal', color: '#000' } },
-    xAxis: {
-      categories: [{% for l in chart_7d.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
-      labels: axisLabel,
-      lineColor: '#ccc',
-      tickColor: '#ccc'
-    },
-    yAxis: {
-      title: { text: null },
-      labels: axisLabel,
-      gridLineDashStyle: 'shortdot'
-    },
-    plotOptions: plotOptions,
-    series: [
-      {% for s in chart_7d.series %}
-      {
-        name: "{{ s.label }}",
-        data: [{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}],
-        color: '#000',
-        lineWidth: 1.5,
-        dashStyle: DASH[{{ forloop.index0 }} % 5],
-        marker: { enabled: true, radius: 3, fillColor: '#000' },
-        connectNulls: false
-      }{% unless forloop.last %},{% endunless %}
-      {% endfor %}
-    ]
-  });
-  {% endif %}
+  {% endfor %}
 
 }());
 </script>
