@@ -21,20 +21,22 @@ CLIMATE_DEVICE_CLASSES = frozenset(SENSOR_DISPLAY_ORDER)
 # Single toggle: enable 24h history charts
 CONF_SHOW_CHART = "show_chart"
 
-# Chart order matches display order — all device classes are charted if data exists
+# Chart order (controls series order in the combined chart)
 CHART_SENSOR_ORDER = SENSOR_DISPLAY_ORDER
 
-# Preferred Highcharts chart type per device class.
-# areaspline is used for single-series; spline is used when multiple areas are present
-# (overlapping fills on e-ink are unreadable).
-CHART_TYPE_PREFERRED = {
-    "temperature":                "spline",
-    "humidity":                   "spline",
-    "carbon_dioxide":             "areaspline",
-    "pressure":                   "spline",
-    "pm25":                       "areaspline",
-    "pm10":                       "areaspline",
-    "volatile_organic_compounds": "areaspline",
-    "nitrogen_dioxide":           "areaspline",
-    "carbon_monoxide":            "areaspline",
+# Device classes that go on the RIGHT y-axis (opposite: true).
+# Everything else uses the LEFT y-axis.
+CHART_YAXIS_RIGHT = {"humidity"}
+
+# Short labels appended to area name when multiple sensor types are charted.
+CHART_TYPE_SHORT = {
+    "temperature":                "temp",
+    "humidity":                   "hum",
+    "carbon_dioxide":             "CO₂",
+    "pressure":                   "hPa",
+    "pm25":                       "PM2.5",
+    "pm10":                       "PM10",
+    "volatile_organic_compounds": "VOC",
+    "nitrogen_dioxide":           "NO₂",
+    "carbon_monoxide":            "CO",
 }
