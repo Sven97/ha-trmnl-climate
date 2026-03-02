@@ -1,175 +1,97 @@
 <style>
   @import url('https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css');
-  .sensor-value { font-weight: 600 !important; }
-  .sensor-row { display: flex; align-items: center; gap: 0.4em; }
-  .sensor-icon { font-size: 1.6em; line-height: 1; }
-  .title_bar { background: none !important; border-top: none !important; }
-  .split { display: grid; grid-template-columns: 1fr 1fr; height: calc(100% - 36px); overflow: hidden; }
-  .split__left { border-right: 1px solid #ccc; overflow: hidden; }
-  .split__right { display: flex; flex-direction: column; overflow: hidden; }
-  .chart-block { flex: 1; display: flex; flex-direction: column; padding: 8px; min-height: 0; }
-  .chart-block + .chart-block { border-top: 1px solid #ccc; }
-  .chart-label { font-size: 11px; font-weight: 600; margin: 0 0 4px 0; }
+  .sensor-row { display: flex; align-items: center; gap: 0.3em; }
+  .title_bar  { background: none !important; border-top: none !important; }
+  /* right-side chart panel: stack sections vertically */
+  .chart-panel { display: flex; flex-direction: column; height: 100%; }
+  .chart-section { flex: 1; padding: 6px 8px; min-height: 0; }
+  .chart-section + .chart-section { border-top: 1px solid #ccc; }
 </style>
 
 {% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
 
-{% capture areas_html %}
-  {% if areas == empty %}
+{% comment %} Reusable areas block — columns auto-distributes and handles overflow {% endcomment %}
+{% capture areas_block %}
+{% if areas == empty %}
+<div class="item">
+  <div class="content">
+    <span class="title">No climate sensors found</span>
+    <span class="description">Assign sensors to areas in Home Assistant.</span>
+  </div>
+</div>
+{% else %}
+<div class="columns">
+  {% for area in areas %}
+  <div class="column">
     <div class="item">
       <div class="content">
-        <span class="title">No climate sensors found</span>
-        <span class="description">Assign sensors to areas in Home Assistant.</span>
+        <span class="title title--small">{{ area.area }}</span>
       </div>
     </div>
-  {% else %}
-    <div class="columns">
-      {% for area in areas %}
-      <div class="column">
-        <div class="item">
-          <div class="content">
-            <span class="title title--small">{{ area.area }}</span>
-          </div>
+    {% for sensor in area.sensors %}
+    {% assign sensor_icon = 'mdi-gauge' %}
+    {% for pair in icon_map %}
+      {% assign kv = pair | split: ':' %}
+      {% if kv[0] == sensor.device_class %}{% assign sensor_icon = kv[1] %}{% break %}{% endif %}
+    {% endfor %}
+    <div class="item">
+      <div class="content">
+        <div class="sensor-row">
+          <span class="mdi {{ sensor_icon }}"></span>
+          <span class="value value--tnums">{{ sensor.state }}{{ sensor.unit }}</span>
         </div>
-        {% for sensor in area.sensors %}
-        {% assign sensor_icon = 'mdi-gauge' %}
-        {% for pair in icon_map %}
-          {% assign parts = pair | split: ':' %}
-          {% if parts[0] == sensor.device_class %}{% assign sensor_icon = parts[1] %}{% break %}{% endif %}
-        {% endfor %}
-        <div class="item">
-          <div class="content">
-            <div class="sensor-row">
-              <span class="mdi {{ sensor_icon }} sensor-icon"></span>
-              <span class="value value--tnums sensor-value" data-value-fit="true">{{ sensor.state }}{{ sensor.unit }}</span>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
       </div>
-      {% endfor %}
     </div>
-  {% endif %}
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 {% endcapture %}
+
+{% comment %} Compute chart height: full panel for one chart, split for two {% endcomment %}
+{% if chart_1d and chart_7d %}{% assign chart_h = 190 %}{% else %}{% assign chart_h = 405 %}{% endif %}
 
 <div class="screen">
   <div class="view view--full">
 
     {% if chart_1d or chart_7d %}
 
-    <div class="split">
-      <div class="split__left">
-        {{ areas_html }}
-      </div>
-      <div class="split__right">
+    {{comment}} Split layout: areas left, chart(s) right {{endcomment}}
+    <div class="layout layout--stretch">
+      <div class="grid grid--cols-2">
 
-        {% assign dash_styles = 'Solid,Dash,Dot,DashDot,LongDash' | split: ',' %}
-
-        {% if chart_1d %}
-        <div class="chart-block">
-          <p class="chart-label">{{ chart_1d.label }} 24h ({{ chart_1d.unit }})</p>
-          <div id="chart-1d" style="flex: 1; min-height: 0;"></div>
+        {{comment}} Left column: current sensor values {% endcomment %}
+        <div style="border-right: 1px solid #ccc; overflow: hidden;">
+          {{ areas_block }}
         </div>
-        {% endif %}
 
-        {% if chart_7d %}
-        <div class="chart-block">
-          <p class="chart-label">{{ chart_7d.label }} 7d ({{ chart_7d.unit }})</p>
-          <div id="chart-7d" style="flex: 1; min-height: 0;"></div>
-        </div>
-        {% endif %}
-
-        <script src="https://code.highcharts.com/highcharts.js"></script>
-        <script>
-        (function () {
-          var commonOpts = {
-            animation: false,
-            backgroundColor: 'transparent',
-            margin: [8, 8, 28, 36],
-            style: { fontFamily: 'inherit' }
-          };
-          var axisStyle = { style: { fontSize: '10px', color: '#333' } };
-          var credits = { enabled: false };
-          var legend = { enabled: true, itemStyle: { fontSize: '9px', fontWeight: 'normal' } };
-          var dashStyles = ['Solid', 'Dash', 'Dot', 'DashDot', 'LongDash'];
+        {{comment}} Right column: history chart(s) {% endcomment %}
+        <div class="chart-panel">
 
           {% if chart_1d %}
-          Highcharts.chart('chart-1d', {
-            chart: Object.assign({ type: 'line' }, commonOpts),
-            title: { text: null },
-            credits: credits,
-            legend: legend,
-            xAxis: {
-              {% assign first_1d = chart_1d.series | first %}
-              categories: [{% for p in first_1d.points %}"{{ p.t }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
-              tickInterval: {% if first_1d.points.size > 18 %}6{% elsif first_1d.points.size > 12 %}4{% elsif first_1d.points.size > 6 %}2{% else %}1{% endif %},
-              labels: axisStyle,
-              lineColor: '#ccc',
-              tickColor: '#ccc'
-            },
-            yAxis: {
-              title: { text: null },
-              labels: axisStyle,
-              gridLineColor: '#eee'
-            },
-            series: [
-              {% for s in chart_1d.series %}
-              {
-                name: "{{ s.label }}",
-                data: [{% for p in s.points %}{{ p.v }}{% unless forloop.last %},{% endunless %}{% endfor %}],
-                color: '#000',
-                lineWidth: 1.5,
-                dashStyle: dashStyles[{{ forloop.index0 }} % dashStyles.length],
-                marker: { enabled: false }
-              }{% unless forloop.last %},{% endunless %}
-              {% endfor %}
-            ],
-            tooltip: { valueSuffix: ' {{ chart_1d.unit }}', shared: true }
-          });
+          <div class="chart-section">
+            <span class="label">{{ chart_1d.label }} · 24 h ({{ chart_1d.unit }})</span>
+            <div id="chart-1d"></div>
+          </div>
           {% endif %}
 
           {% if chart_7d %}
-          Highcharts.chart('chart-7d', {
-            chart: Object.assign({ type: 'line' }, commonOpts),
-            title: { text: null },
-            credits: credits,
-            legend: legend,
-            xAxis: {
-              {% assign first_7d = chart_7d.series | first %}
-              categories: [{% for p in first_7d.points %}"{{ p.t }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
-              labels: axisStyle,
-              lineColor: '#ccc',
-              tickColor: '#ccc'
-            },
-            yAxis: {
-              title: { text: null },
-              labels: axisStyle,
-              gridLineColor: '#eee'
-            },
-            series: [
-              {% for s in chart_7d.series %}
-              {
-                name: "{{ s.label }}",
-                data: [{% for p in s.points %}{{ p.v }}{% unless forloop.last %},{% endunless %}{% endfor %}],
-                color: '#000',
-                lineWidth: 1.5,
-                dashStyle: dashStyles[{{ forloop.index0 }} % dashStyles.length],
-                marker: { radius: 3, enabled: true, fillColor: '#000' }
-              }{% unless forloop.last %},{% endunless %}
-              {% endfor %}
-            ],
-            tooltip: { valueSuffix: ' {{ chart_7d.unit }}', shared: true }
-          });
+          <div class="chart-section">
+            <span class="label">{{ chart_7d.label }} · 7 d ({{ chart_7d.unit }})</span>
+            <div id="chart-7d"></div>
+          </div>
           {% endif %}
-        }());
-        </script>
+
+        </div>
       </div>
     </div>
 
     {% else %}
 
+    {{comment}} No charts: full-width areas {% endcomment}}
     <div class="layout">
-      {{ areas_html }}
+      {{ areas_block }}
     </div>
 
     {% endif %}
@@ -179,3 +101,100 @@
     </div>
   </div>
 </div>
+
+{% if chart_1d or chart_7d %}
+<script src="https://trmnl.com/js/highcharts/12.3.0/highcharts.js"></script>
+<script>
+(function () {
+  var DASH = ['Solid', 'Dash', 'Dot', 'DashDot', 'LongDash'];
+
+  var baseChart = {
+    animation: false,
+    backgroundColor: 'transparent',
+    margin: [4, 8, 24, 36],
+    style: { fontFamily: 'inherit' }
+  };
+
+  var axisLabel = { style: { fontSize: '9px', color: '#000' } };
+
+  var plotOptions = {
+    series: {
+      animation: false,
+      enableMouseTracking: false
+    }
+  };
+
+  {% if chart_1d %}
+  Highcharts.chart('chart-1d', {
+    chart: Object.assign({ type: 'line', height: {{ chart_h }} }, baseChart),
+    title:   { text: null },
+    credits: { enabled: false },
+    tooltip: { enabled: false },
+    legend:  { enabled: true, itemStyle: { fontSize: '8px', fontWeight: 'normal', color: '#000' } },
+    xAxis: {
+      categories: [{% for l in chart_1d.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+      tickPixelInterval: 80,
+      labels: axisLabel,
+      lineColor: '#ccc',
+      tickColor: '#ccc'
+    },
+    yAxis: {
+      title: { text: null },
+      labels: axisLabel,
+      gridLineDashStyle: 'shortdot'
+    },
+    plotOptions: plotOptions,
+    series: [
+      {% for s in chart_1d.series %}
+      {
+        name: "{{ s.label }}",
+        data: [{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}],
+        color: '#000',
+        lineWidth: 1.5,
+        dashStyle: DASH[{{ forloop.index0 }} % 5],
+        marker: { enabled: false },
+        connectNulls: false
+      }{% unless forloop.last %},{% endunless %}
+      {% endfor %}
+    ]
+  });
+  {% endif %}
+
+  {% if chart_7d %}
+  Highcharts.chart('chart-7d', {
+    chart: Object.assign({ type: 'line', height: {{ chart_h }} }, baseChart),
+    title:   { text: null },
+    credits: { enabled: false },
+    tooltip: { enabled: false },
+    legend:  { enabled: true, itemStyle: { fontSize: '8px', fontWeight: 'normal', color: '#000' } },
+    xAxis: {
+      categories: [{% for l in chart_7d.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+      labels: axisLabel,
+      lineColor: '#ccc',
+      tickColor: '#ccc'
+    },
+    yAxis: {
+      title: { text: null },
+      labels: axisLabel,
+      gridLineDashStyle: 'shortdot'
+    },
+    plotOptions: plotOptions,
+    series: [
+      {% for s in chart_7d.series %}
+      {
+        name: "{{ s.label }}",
+        data: [{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}],
+        color: '#000',
+        lineWidth: 1.5,
+        dashStyle: DASH[{{ forloop.index0 }} % 5],
+        marker: { enabled: true, radius: 3, fillColor: '#000' },
+        connectNulls: false
+      }{% unless forloop.last %},{% endunless %}
+      {% endfor %}
+    ]
+  });
+  {% endif %}
+
+}());
+</script>
+{% endif %}
