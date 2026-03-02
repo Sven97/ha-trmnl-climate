@@ -17,7 +17,7 @@ async def async_setup_entry(
 
 
 class TrmnlClimatePushButton(ButtonEntity):
-    _attr_name = "Push to TRMNL"
+    _attr_name = "Manual Push to TRMNL"
     _attr_icon = "mdi:cloud-upload"
     _attr_should_poll = False
 
