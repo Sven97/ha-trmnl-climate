@@ -45,20 +45,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.debug("No climate sensors found in any area — skipping push")
             return
 
-        # Resolve area_filter IDs → names so the markup can filter display
-        area_filter: list[str] = options.get(CONF_AREA_FILTER, [])
-        display_areas: list[str] = []
-        if area_filter:
-            area_reg = ar.async_get(hass)
-            display_areas = [
-                area.name
-                for area_id in area_filter
-                if (area := area_reg.async_get_area(area_id)) is not None
-            ]
-
         merge_vars: dict = {
             "areas": areas_data,
-            "display_areas": display_areas,
             "last_updated": dt_util.now().strftime("%H:%M"),
         }
 
