@@ -20,10 +20,20 @@
   "options": {
     "step": {
       "init": {
-        "title": "Chart Settings",
+        "title": "Display & Push Settings",
         "description": "Show 24-hour sensor history charts alongside current values. Requires the HA Recorder integration.",
         "data": {
-          "show_chart": "Show 24h history charts"
+          "show_chart": "Show history charts",
+          "area_filter": "Areas to show",
+          "chart_sensor_types": "Sensor types in chart",
+          "chart_hours": "Chart history window",
+          "push_interval": "Update interval (minutes)"
+        },
+        "data_description": {
+          "area_filter": "Leave empty to show all areas.",
+          "chart_sensor_types": "Leave empty to chart all sensor types. Selecting fewer reduces chart clutter.",
+          "chart_hours": "How many hours of history to show.",
+          "push_interval": "How often data is sent to your TRMNL device."
         }
       }
     }

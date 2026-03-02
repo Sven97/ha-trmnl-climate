@@ -21,6 +21,11 @@ CLIMATE_DEVICE_CLASSES = frozenset(SENSOR_DISPLAY_ORDER)
 # Single toggle: enable 24h history charts
 CONF_SHOW_CHART = "show_chart"
 
+CONF_AREA_FILTER = "area_filter"
+CONF_CHART_SENSOR_TYPES = "chart_sensor_types"
+CONF_CHART_HOURS = "chart_hours"
+CONF_PUSH_INTERVAL = "push_interval"
+
 # Chart order (controls series order in the combined chart)
 CHART_SENSOR_ORDER = SENSOR_DISPLAY_ORDER
 

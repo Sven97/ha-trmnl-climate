@@ -20,10 +20,13 @@ from .const import (
     CHART_TYPE_SHORT,
     CHART_YAXIS_RIGHT,
     CLIMATE_DEVICE_CLASSES,
+    CONF_AREA_FILTER,
+    CONF_CHART_HOURS,
+    CONF_CHART_SENSOR_TYPES,
+    CONF_PUSH_INTERVAL,
     CONF_SHOW_CHART,
     CONF_WEBHOOK_URL,
     DOMAIN,
-    PUSH_INTERVAL_MINUTES,
     SENSOR_DISPLAY_ORDER,
 )
 
@@ -36,7 +39,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     webhook_url = entry.data[CONF_WEBHOOK_URL]
 
     async def push_climate_data(_now=None) -> None:
-        areas_data = _build_areas_data(hass)
+        options = entry.options
+        areas_data = _build_areas_data(hass, options)
         if not areas_data:
             _LOGGER.debug("No climate sensors found in any area — skipping push")
             return
@@ -46,7 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "last_updated": dt_util.now().strftime("%H:%M"),
         }
 
-        chart_data = await _build_chart_data(hass, entry.options)
+        chart_data = await _build_chart_data(hass, options)
         merge_vars.update(chart_data)
 
         session = async_get_clientsession(hass)
@@ -70,16 +74,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"push": push_climate_data}
 
     await push_climate_data()
+
+    push_interval = int(entry.options.get(CONF_PUSH_INTERVAL, 15))
     entry.async_on_unload(
         async_track_time_interval(
             hass,
             push_climate_data,
-            timedelta(minutes=PUSH_INTERVAL_MINUTES),
+            timedelta(minutes=push_interval),
         )
     )
 
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry when options change (picks up new push_interval etc.)."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -93,8 +106,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 # Current sensor data
 # ---------------------------------------------------------------------------
 
-def _build_areas_data(hass: HomeAssistant) -> list[dict]:
+def _build_areas_data(hass: HomeAssistant, options: dict) -> list[dict]:
     """Return climate sensors grouped by area, sorted by area name."""
+    area_filter: list[str] = options.get(CONF_AREA_FILTER, [])
+
     area_reg = ar.async_get(hass)
     entity_reg = er.async_get(hass)
     device_reg = dr.async_get(hass)
@@ -124,6 +139,9 @@ def _build_areas_data(hass: HomeAssistant) -> list[dict]:
         if area_id is None:
             continue
 
+        if area_filter and area_id not in area_filter:
+            continue
+
         area = area_reg.async_get_area(area_id)
         if area is None:
             continue
@@ -148,8 +166,10 @@ def _build_areas_data(hass: HomeAssistant) -> list[dict]:
 # Chart / history data
 # ---------------------------------------------------------------------------
 
-def _find_chart_entities_by_class(hass: HomeAssistant) -> dict[str, list[dict]]:
+def _find_chart_entities_by_class(hass: HomeAssistant, options: dict) -> dict[str, list[dict]]:
     """Return {device_class: [{entity_id, area_name, unit}]} — one entity per area."""
+    area_filter: list[str] = options.get(CONF_AREA_FILTER, [])
+
     area_reg = ar.async_get(hass)
     entity_reg = er.async_get(hass)
     device_reg = dr.async_get(hass)
@@ -180,6 +200,9 @@ def _find_chart_entities_by_class(hass: HomeAssistant) -> dict[str, list[dict]]:
         if area_id is None:
             continue
 
+        if area_filter and area_id not in area_filter:
+            continue
+
         area = area_reg.async_get_area(area_id)
         if area is None:
             continue
@@ -208,7 +231,7 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
 
     Returns {"chart": {labels, left_unit, right_unit, has_right, series}}
     where each series has {label, y_axis (0=left, 1=right), data}.
-    All series share the same x-axis labels (union of 24h hourly buckets).
+    All series share the same x-axis labels (union of hourly buckets).
     """
     if not options.get(CONF_SHOW_CHART, False):
         return {}
@@ -220,7 +243,18 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         _LOGGER.debug("Recorder not available — chart data skipped")
         return {}
 
-    entities_by_class = _find_chart_entities_by_class(hass)
+    entities_by_class = _find_chart_entities_by_class(hass, options)
+    if not entities_by_class:
+        return {}
+
+    # Filter to selected sensor types (empty = all)
+    chart_sensor_types: list[str] = options.get(CONF_CHART_SENSOR_TYPES, [])
+    if chart_sensor_types:
+        entities_by_class = {
+            dc: ents
+            for dc, ents in entities_by_class.items()
+            if dc in chart_sensor_types
+        }
     if not entities_by_class:
         return {}
 
@@ -230,9 +264,10 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         for e in ents
     ]
 
+    chart_hours = int(options.get(CONF_CHART_HOURS, 24))
     now = dt_util.now()
     tz = now.tzinfo
-    start = now - timedelta(hours=24)
+    start = now - timedelta(hours=chart_hours)
     start_local = start.astimezone(tz)
 
     try:
@@ -245,7 +280,7 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         _LOGGER.warning("Failed to fetch chart history: %s", err)
         return {}
 
-    # Bucket all entities into hourly averages, collecting the union of hours with data
+    # Bucket all entities into hourly averages
     entity_buckets: dict[str, dict[int, list[float]]] = {}
     all_hour_keys: set[int] = set()
 
@@ -257,7 +292,7 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
             except (ValueError, AttributeError):
                 continue
             key = int((s.last_changed.astimezone(tz) - start_local).total_seconds() // 3600)
-            if 0 <= key < 24:
+            if 0 <= key < chart_hours:
                 buckets[key].append(v)
                 all_hour_keys.add(key)
         entity_buckets[entity_id] = buckets
