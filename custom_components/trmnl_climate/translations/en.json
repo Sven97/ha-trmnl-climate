@@ -30,7 +30,7 @@
           "push_interval": "Update interval (minutes)"
         },
         "data_description": {
-          "area_filter": "Leave empty to show all areas.",
+          "area_filter": "Leave empty to show all areas. All area data is always collected.",
           "chart_sensor_types": "Leave empty to chart all sensor types. Selecting fewer reduces chart clutter.",
           "chart_hours": "How many hours of history to show.",
           "push_interval": "How often data is sent to your TRMNL device."

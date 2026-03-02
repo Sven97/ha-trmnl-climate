@@ -36,6 +36,11 @@
       <div style="flex: 2; overflow: hidden;">
         <div class="columns">
           {% for area in areas %}
+          {% if display_areas != empty %}
+            {% assign area_visible = false %}
+            {% for da in display_areas %}{% if da == area.area %}{% assign area_visible = true %}{% break %}{% endif %}{% endfor %}
+            {% unless area_visible %}{% continue %}{% endunless %}
+          {% endif %}
           <div class="column">
             <div class="item">
               <div class="content">
@@ -68,6 +73,11 @@
     <div class="layout">
       <div class="columns">
         {% for area in areas %}
+        {% if display_areas != empty %}
+          {% assign area_visible = false %}
+          {% for da in display_areas %}{% if da == area.area %}{% assign area_visible = true %}{% break %}{% endif %}{% endfor %}
+          {% unless area_visible %}{% continue %}{% endunless %}
+        {% endif %}
         <div class="column">
           <div class="item">
             <div class="content">

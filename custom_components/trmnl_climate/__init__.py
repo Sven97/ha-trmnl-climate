@@ -40,13 +40,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def push_climate_data(_now=None) -> None:
         options = entry.options
-        areas_data = _build_areas_data(hass, options)
+        areas_data = _build_areas_data(hass)
         if not areas_data:
             _LOGGER.debug("No climate sensors found in any area — skipping push")
             return
 
+        # Resolve area_filter IDs → names so the markup can filter display
+        area_filter: list[str] = options.get(CONF_AREA_FILTER, [])
+        display_areas: list[str] = []
+        if area_filter:
+            area_reg = ar.async_get(hass)
+            display_areas = [
+                area.name
+                for area_id in area_filter
+                if (area := area_reg.async_get_area(area_id)) is not None
+            ]
+
         merge_vars: dict = {
             "areas": areas_data,
+            "display_areas": display_areas,
             "last_updated": dt_util.now().strftime("%H:%M"),
         }
 
@@ -106,10 +118,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 # Current sensor data
 # ---------------------------------------------------------------------------
 
-def _build_areas_data(hass: HomeAssistant, options: dict) -> list[dict]:
+def _build_areas_data(hass: HomeAssistant) -> list[dict]:
     """Return climate sensors grouped by area, sorted by area name."""
-    area_filter: list[str] = options.get(CONF_AREA_FILTER, [])
-
     area_reg = ar.async_get(hass)
     entity_reg = er.async_get(hass)
     device_reg = dr.async_get(hass)
@@ -137,9 +147,6 @@ def _build_areas_data(hass: HomeAssistant, options: dict) -> list[dict]:
                 area_id = device.area_id
 
         if area_id is None:
-            continue
-
-        if area_filter and area_id not in area_filter:
             continue
 
         area = area_reg.async_get_area(area_id)
