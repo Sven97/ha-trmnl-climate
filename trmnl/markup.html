@@ -1,6 +1,7 @@
 <style>
   @import url('https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css');
   .sensor-value { font-weight: 600 !important; }
+  .sensor-icon { font-size: 1.6em; line-height: 1; }
 </style>
 
 <div class="screen">
@@ -44,13 +45,11 @@
             {% endfor %}
 
             <div class="item">
-              <div class="meta">
-                <span class="mdi {{ sensor_icon }}"></span>
-              </div>
               <div class="content">
-                <span class="value value--tnums sensor-value" data-value-fit="true">
-                  {{ sensor.state }}{{ sensor.unit }}
-                </span>
+                <div class="flex gap--small align-center">
+                  <span class="mdi {{ sensor_icon }} sensor-icon"></span>
+                  <span class="value value--tnums sensor-value" data-value-fit="true">{{ sensor.state }}{{ sensor.unit }}</span>
+                </div>
               </div>
             </div>
 
