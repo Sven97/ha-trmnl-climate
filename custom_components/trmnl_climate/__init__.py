@@ -18,6 +18,7 @@ from .const import (
     CONF_WEBHOOK_URL,
     DOMAIN,
     PUSH_INTERVAL_MINUTES,
+    SENSOR_DISPLAY_ORDER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -112,5 +113,9 @@ def _build_areas_data(hass: HomeAssistant) -> list[dict]:
             "unit": state.attributes.get("unit_of_measurement", ""),
             "device_class": device_class,
         })
+
+    order = {dc: i for i, dc in enumerate(SENSOR_DISPLAY_ORDER)}
+    for area in areas.values():
+        area["sensors"].sort(key=lambda s: order.get(s["device_class"], 99))
 
     return sorted(areas.values(), key=lambda a: a["area"])

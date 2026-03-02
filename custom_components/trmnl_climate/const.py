@@ -4,7 +4,7 @@ CONF_WEBHOOK_URL = "webhook_url"
 
 PUSH_INTERVAL_MINUTES = 15
 
-CLIMATE_DEVICE_CLASSES = frozenset({
+SENSOR_DISPLAY_ORDER = [
     "temperature",
     "humidity",
     "carbon_dioxide",
@@ -14,4 +14,6 @@ CLIMATE_DEVICE_CLASSES = frozenset({
     "volatile_organic_compounds",
     "nitrogen_dioxide",
     "carbon_monoxide",
-})
+]
+
+CLIMATE_DEVICE_CLASSES = frozenset(SENSOR_DISPLAY_ORDER)
