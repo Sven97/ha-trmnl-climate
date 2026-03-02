@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -29,6 +30,8 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["button"]
+
+_DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -151,7 +154,7 @@ def _find_all_chart_entities(
     hass: HomeAssistant,
     device_class: str,
 ) -> list[dict]:
-    """Return list of {entity_id, area_name, unit} for all matching sensors."""
+    """Return one {entity_id, area_name, unit} per area for the given device class."""
     area_reg = ar.async_get(hass)
     entity_reg = er.async_get(hass)
     device_reg = dr.async_get(hass)
@@ -207,8 +210,58 @@ def _pick_device_class(hass: HomeAssistant) -> str | None:
     return None
 
 
+def _bin_hourly(entity_states: list, start, tz) -> list[dict]:
+    """Bucket state history into hourly averages."""
+    buckets: dict[int, list[float]] = defaultdict(list)
+    start_local = start.astimezone(tz)
+
+    for s in entity_states:
+        try:
+            v = float(s.state)
+        except (ValueError, AttributeError):
+            continue
+        lc = s.last_changed.astimezone(tz)
+        hour_key = int((lc - start_local).total_seconds() // 3600)
+        if 0 <= hour_key < 24:
+            buckets[hour_key].append(v)
+
+    return [
+        {
+            "t": (start_local + timedelta(hours=h)).strftime("%H:%M"),
+            "v": round(sum(vals) / len(vals), 1),
+        }
+        for h, vals in sorted(buckets.items())
+    ]
+
+
+def _bin_daily(entity_states: list, start, tz) -> list[dict]:
+    """Bucket state history into daily averages."""
+    buckets: dict[int, list[float]] = defaultdict(list)
+    weekdays: dict[int, int] = {}
+    start_local = start.astimezone(tz)
+
+    for s in entity_states:
+        try:
+            v = float(s.state)
+        except (ValueError, AttributeError):
+            continue
+        lc = s.last_changed.astimezone(tz)
+        day_key = int((lc - start_local).total_seconds() // 86400)
+        if 0 <= day_key < 7:
+            buckets[day_key].append(v)
+            weekdays[day_key] = lc.weekday()
+
+    return [
+        {
+            "t": _DAY_NAMES[weekdays[d]],
+            "v": round(sum(vals) / len(vals), 1),
+        }
+        for d, vals in sorted(buckets.items())
+    ]
+
+
 async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
-    """Build chart_1d and/or chart_7d payloads based on user options."""
+    """Build chart_1d / chart_7d payloads from recorded state history."""
     show_1d = options.get(CONF_SHOW_1DAY, False)
     show_7d = options.get(CONF_SHOW_7DAY, False)
 
@@ -217,7 +270,7 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
 
     try:
         from homeassistant.components.recorder import get_instance
-        from homeassistant.components.recorder.statistics import statistics_during_period
+        from homeassistant.components.recorder.history import get_significant_states
     except ImportError:
         _LOGGER.debug("Recorder not available — chart data skipped")
         return {}
@@ -230,69 +283,55 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
     if not entities:
         return {}
 
-    entity_ids = {e["entity_id"] for e in entities}
+    entity_ids = [e["entity_id"] for e in entities]
     label = CHART_SENSOR_LABELS.get(device_class, device_class.replace("_", " ").title())
     unit = entities[0]["unit"]
     now = dt_util.now()
+    tz = now.tzinfo
     result: dict = {}
 
     try:
         if show_1d:
-            stats = await get_instance(hass).async_add_executor_job(
-                statistics_during_period,
+            start = now - timedelta(hours=24)
+            states_map = await get_instance(hass).async_add_executor_job(
+                get_significant_states,
                 hass,
-                now - timedelta(hours=24),
-                None,
+                start,
+                now,
                 entity_ids,
-                "hour",
-                None,
-                {"mean"},
+                None,   # filters
+                True,   # include_start_time_state
+                False,  # significant_changes_only — include all recorded values
+                False,  # minimal_response
+                True,   # no_attributes
             )
             series = []
             for e in entities:
-                rows = [r for r in stats.get(e["entity_id"], []) if r.mean is not None]
-                if not rows:
-                    continue
-                series.append({
-                    "label": e["area_name"],
-                    "points": [
-                        {
-                            "t": r.start.astimezone(now.tzinfo).strftime("%H:%M"),
-                            "v": round(r.mean, 1),
-                        }
-                        for r in rows
-                    ],
-                })
+                points = _bin_hourly(states_map.get(e["entity_id"], []), start, tz)
+                if points:
+                    series.append({"label": e["area_name"], "points": points})
             if series:
                 result["chart_1d"] = {"label": label, "unit": unit, "series": series}
 
         if show_7d:
-            stats = await get_instance(hass).async_add_executor_job(
-                statistics_during_period,
+            start = now - timedelta(days=7)
+            states_map = await get_instance(hass).async_add_executor_job(
+                get_significant_states,
                 hass,
-                now - timedelta(days=7),
-                None,
+                start,
+                now,
                 entity_ids,
-                "day",
                 None,
-                {"mean"},
+                True,
+                False,
+                False,
+                True,
             )
-            day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
             series = []
             for e in entities:
-                rows = [r for r in stats.get(e["entity_id"], []) if r.mean is not None]
-                if not rows:
-                    continue
-                series.append({
-                    "label": e["area_name"],
-                    "points": [
-                        {
-                            "t": day_names[r.start.astimezone(now.tzinfo).weekday()],
-                            "v": round(r.mean, 1),
-                        }
-                        for r in rows
-                    ],
-                })
+                points = _bin_daily(states_map.get(e["entity_id"], []), start, tz)
+                if points:
+                    series.append({"label": e["area_name"], "points": points})
             if series:
                 result["chart_7d"] = {"label": label, "unit": unit, "series": series}
 
