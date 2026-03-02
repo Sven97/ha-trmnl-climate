@@ -38,7 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         payload = {"merge_variables": {
             "areas": areas_data,
-            "last_updated": dt_util.now().strftime("%-H:%M"),
+            "last_updated": dt_util.now().strftime("%H:%M"),
         }}
         session = async_get_clientsession(hass)
         try:
