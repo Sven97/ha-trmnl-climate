@@ -1,13 +1,21 @@
+<style>
+  @import url('https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css');
+  .sensor-value { font-weight: 600 !important; }
+</style>
+
 <div class="screen">
   <div class="view view--full">
     <div class="layout">
+
+      {% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
+      {% assign label_map = 'temperature:Temperature,humidity:Humidity,carbon_dioxide:CO₂,pressure:Pressure,pm25:PM2.5,pm10:PM10,volatile_organic_compounds:VOC,nitrogen_dioxide:NO₂,carbon_monoxide:CO' | split: ',' %}
 
       {% if areas == empty %}
 
         <div class="item">
           <div class="content">
             <span class="title">No climate sensors found</span>
-            <span class="description">Assign sensors to areas in Home Assistant, then trigger the automation.</span>
+            <span class="description">Assign sensors to areas in Home Assistant, then trigger the integration.</span>
           </div>
         </div>
 
@@ -19,32 +27,43 @@
 
             <div class="item">
               <div class="content">
-                <span class="title title--small">{{ area.area }}</span>
+                <span class="title title--small">
+                  <span class="mdi mdi-home-variant"></span>
+                  {{ area.area }}
+                </span>
               </div>
             </div>
 
             {% for sensor in area.sensors %}
+            {% assign sensor_icon = 'mdi-gauge' %}
+            {% assign sensor_label = sensor.device_class | replace: '_', ' ' | capitalize %}
+            {% for pair in icon_map %}
+              {% assign parts = pair | split: ':' %}
+              {% if parts[0] == sensor.device_class %}
+                {% assign sensor_icon = parts[1] %}
+                {% break %}
+              {% endif %}
+            {% endfor %}
+            {% for pair in label_map %}
+              {% assign parts = pair | split: ':' %}
+              {% if parts[0] == sensor.device_class %}
+                {% assign sensor_label = parts[1] %}
+                {% break %}
+              {% endif %}
+            {% endfor %}
+
             <div class="item">
-              <div class="meta">
-                <span class="label label--small">
-                  {%- assign dc = sensor.device_class -%}
-                  {%- if dc == "temperature" -%}Temp
-                  {%- elsif dc == "humidity" -%}Hum
-                  {%- elsif dc == "carbon_dioxide" -%}CO₂
-                  {%- elsif dc == "pressure" -%}Pres
-                  {%- elsif dc == "pm25" -%}PM2.5
-                  {%- elsif dc == "pm10" -%}PM10
-                  {%- elsif dc == "volatile_organic_compounds" -%}VOC
-                  {%- elsif dc == "nitrogen_dioxide" -%}NO₂
-                  {%- elsif dc == "carbon_monoxide" -%}CO
-                  {%- else -%}{{ dc | capitalize }}
-                  {%- endif -%}
+              <div class="content">
+                <span class="label">
+                  <span class="mdi {{ sensor_icon }}"></span>
+                  {{ sensor_label }}
+                </span>
+                <span class="value value--tnums sensor-value" data-value-fit="true">
+                  {{ sensor.state }}{{ sensor.unit }}
                 </span>
               </div>
-              <div class="content">
-                <span class="value value--small">{{ sensor.state }}{{ sensor.unit }}</span>
-              </div>
             </div>
+
             {% endfor %}
 
           </div>

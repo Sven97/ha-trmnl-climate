@@ -53,8 +53,6 @@ Copy the `custom_components/trmnl_climate/` folder into your HA
 5. Save — copy the **Webhook URL** shown on the settings page
    (looks like `https://trmnl.com/api/custom_plugins/xxxxxxxxxxxxxxxx`)
 
-> **Variable syntax:** TRMNL's markup editor uses `##{{ variable }}` for output
-> tags. If variables appear as raw text, replace `{{ ` with `##{{ ` in the markup.
 
 ### 2. Add the integration
 
