@@ -23,6 +23,8 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+PLATFORMS = ["button"]
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     webhook_url = entry.data[CONF_WEBHOOK_URL]
@@ -52,6 +54,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as err:
             _LOGGER.error("Error pushing climate data to TRMNL: %s", err)
 
+    # Expose push function for the button entity
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"push": push_climate_data}
+
     # Push once immediately, then on the interval
     await push_climate_data()
     entry.async_on_unload(
@@ -62,11 +67,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     )
 
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    return True
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+    return unload_ok
 
 
 def _build_areas_data(hass: HomeAssistant) -> list[dict]:
