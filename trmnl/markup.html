@@ -3,6 +3,7 @@
   .sensor-value { font-weight: 600 !important; }
   .sensor-row { display: flex; align-items: center; gap: 0.4em; }
   .sensor-icon { font-size: 1.6em; line-height: 1; }
+  .title_bar { background: none !important; border-top: none !important; }
 </style>
 
 <div class="screen">
@@ -28,10 +29,7 @@
 
             <div class="item">
               <div class="content">
-                <span class="title title--small">
-                  <span class="mdi mdi-home-variant"></span>
-                  {{ area.area }}
-                </span>
+                <span class="title title--small">{{ area.area }}</span>
               </div>
             </div>
 
@@ -64,8 +62,7 @@
 
     </div>
     <div class="title_bar">
-      <span class="title">Climate</span>
-      <span class="instance">Home Assistant</span>
+      <span class="instance">Updated {{ last_updated }}</span>
     </div>
   </div>
 </div>

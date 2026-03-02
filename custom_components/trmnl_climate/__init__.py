@@ -12,6 +12,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CLIMATE_DEVICE_CLASSES,
@@ -35,7 +36,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.debug("No climate sensors found in any area — skipping push")
             return
 
-        payload = {"merge_variables": {"areas": areas_data}}
+        payload = {"merge_variables": {
+            "areas": areas_data,
+            "last_updated": dt_util.now().strftime("%-H:%M"),
+        }}
         session = async_get_clientsession(hass)
         try:
             async with session.post(
