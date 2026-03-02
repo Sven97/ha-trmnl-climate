@@ -1,0 +1,62 @@
+<div class="screen">
+  <div class="view view--full">
+    <div class="layout">
+
+      {% if areas == empty %}
+
+        <div class="item">
+          <div class="content">
+            <span class="title">No climate sensors found</span>
+            <span class="description">Assign sensors to areas in Home Assistant, then trigger the automation.</span>
+          </div>
+        </div>
+
+      {% else %}
+
+        <div class="columns">
+          {% for area in areas %}
+          <div class="column">
+
+            <div class="item">
+              <div class="content">
+                <span class="title title--small">{{ area.area }}</span>
+              </div>
+            </div>
+
+            {% for sensor in area.sensors %}
+            <div class="item">
+              <div class="meta">
+                <span class="label label--small">
+                  {%- assign dc = sensor.device_class -%}
+                  {%- if dc == "temperature" -%}Temp
+                  {%- elsif dc == "humidity" -%}Hum
+                  {%- elsif dc == "carbon_dioxide" -%}CO₂
+                  {%- elsif dc == "pressure" -%}Pres
+                  {%- elsif dc == "pm25" -%}PM2.5
+                  {%- elsif dc == "pm10" -%}PM10
+                  {%- elsif dc == "volatile_organic_compounds" -%}VOC
+                  {%- elsif dc == "nitrogen_dioxide" -%}NO₂
+                  {%- elsif dc == "carbon_monoxide" -%}CO
+                  {%- else -%}{{ dc | capitalize }}
+                  {%- endif -%}
+                </span>
+              </div>
+              <div class="content">
+                <span class="value value--small">{{ sensor.state }}{{ sensor.unit }}</span>
+              </div>
+            </div>
+            {% endfor %}
+
+          </div>
+          {% endfor %}
+        </div>
+
+      {% endif %}
+
+    </div>
+    <div class="title_bar">
+      <span class="title">Climate</span>
+      <span class="instance">Home Assistant</span>
+    </div>
+  </div>
+</div>

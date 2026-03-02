@@ -1,0 +1,12 @@
+{
+  "domain": "trmnl_climate",
+  "name": "TRMNL HA Climate Connector",
+  "version": "1.0.0",
+  "config_flow": true,
+  "documentation": "https://github.com/Sven97/ha-trmnl-climate",
+  "issue_tracker": "https://github.com/Sven97/ha-trmnl-climate/issues",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": ["@Sven97"],
+  "iot_class": "cloud_push"
+}

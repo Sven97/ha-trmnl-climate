@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "TRMNL HA Climate Connector",
+        "description": "Paste the webhook URL from your TRMNL plugin's Settings page (Plugins → your plugin → Webhook URL).",
+        "data": {
+          "webhook_url": "TRMNL Webhook URL"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "URL must start with https://",
+      "cannot_connect": "Could not reach the webhook URL. Check that it is correct and that TRMNL is reachable."
+    },
+    "abort": {
+      "already_configured": "This webhook URL is already configured."
+    }
+  }
+}
