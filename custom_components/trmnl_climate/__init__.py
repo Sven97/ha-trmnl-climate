@@ -15,16 +15,11 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CHART_DAILY_MINMAX,
-    CHART_TYPE_24H,
-    CHART_TYPE_7DAY,
-    CHART_TYPE_DISABLED,
+    CHART_SENSOR_LABELS,
+    CHART_SENSOR_PRIORITY,
     CLIMATE_DEVICE_CLASSES,
-    CONF_CHART_AREA,
-    CONF_CHART_DAILY_MODE,
-    CONF_CHART_RESOLUTION,
-    CONF_CHART_SENSOR,
-    CONF_CHART_TYPE,
+    CONF_SHOW_1DAY,
+    CONF_SHOW_7DAY,
     CONF_WEBHOOK_URL,
     DOMAIN,
     PUSH_INTERVAL_MINUTES,
@@ -45,14 +40,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.debug("No climate sensors found in any area — skipping push")
             return
 
-        chart_data = await _build_chart_data(hass, entry.options)
-
         merge_vars: dict = {
             "areas": areas_data,
             "last_updated": dt_util.now().strftime("%H:%M"),
         }
-        if chart_data:
-            merge_vars["chart"] = chart_data
+
+        chart_data = await _build_chart_data(hass, entry.options)
+        merge_vars.update(chart_data)
 
         session = async_get_clientsession(hass)
         try:
@@ -153,15 +147,17 @@ def _build_areas_data(hass: HomeAssistant) -> list[dict]:
 # Chart / history data
 # ---------------------------------------------------------------------------
 
-def _find_chart_entity(
+def _find_all_chart_entities(
     hass: HomeAssistant,
     device_class: str,
-    target_area_id: str | None,
-) -> tuple[str | None, str | None, str | None]:
-    """Return (entity_id, area_name, unit) for the first matching sensor."""
+) -> list[dict]:
+    """Return list of {entity_id, area_name, unit} for all matching sensors."""
     area_reg = ar.async_get(hass)
     entity_reg = er.async_get(hass)
     device_reg = dr.async_get(hass)
+
+    seen_areas: set[str] = set()
+    results: list[dict] = []
 
     for entity in entity_reg.entities.values():
         if not entity.entity_id.startswith("sensor."):
@@ -181,115 +177,126 @@ def _find_chart_entity(
             if device:
                 area_id = device.area_id
 
-        if target_area_id and area_id != target_area_id:
-            continue
-        if area_id is None:
+        if area_id is None or area_id in seen_areas:
             continue
 
         area = area_reg.async_get_area(area_id)
-        return (
-            entity.entity_id,
-            area.name if area else "",
-            state.attributes.get("unit_of_measurement", ""),
-        )
+        if area is None:
+            continue
 
-    return None, None, None
+        seen_areas.add(area_id)
+        results.append({
+            "entity_id": entity.entity_id,
+            "area_name": area.name,
+            "unit": state.attributes.get("unit_of_measurement", ""),
+        })
+
+    return sorted(results, key=lambda x: x["area_name"])
 
 
-async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict | None:
-    """Build chart payload from recorder statistics based on user options."""
-    chart_type = options.get(CONF_CHART_TYPE, CHART_TYPE_DISABLED)
-    if chart_type == CHART_TYPE_DISABLED:
-        return None
+def _pick_device_class(hass: HomeAssistant) -> str | None:
+    """Return the highest-priority device class that has at least one sensor."""
+    entity_reg = er.async_get(hass)
+    for dc in CHART_SENSOR_PRIORITY:
+        for entity in entity_reg.entities.values():
+            if not entity.entity_id.startswith("sensor."):
+                continue
+            state = hass.states.get(entity.entity_id)
+            if state and state.attributes.get("device_class") == dc:
+                return dc
+    return None
+
+
+async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
+    """Build chart_1d and/or chart_7d payloads based on user options."""
+    show_1d = options.get(CONF_SHOW_1DAY, False)
+    show_7d = options.get(CONF_SHOW_7DAY, False)
+
+    if not show_1d and not show_7d:
+        return {}
 
     try:
         from homeassistant.components.recorder import get_instance
         from homeassistant.components.recorder.statistics import statistics_during_period
     except ImportError:
         _LOGGER.debug("Recorder not available — chart data skipped")
-        return None
+        return {}
 
-    device_class = options.get(CONF_CHART_SENSOR, "temperature")
-    target_area_id = options.get(CONF_CHART_AREA) or None
+    device_class = _pick_device_class(hass)
+    if not device_class:
+        return {}
 
-    entity_id, area_name, unit = _find_chart_entity(hass, device_class, target_area_id)
-    if not entity_id:
-        _LOGGER.debug(
-            "No chart entity found for device_class=%s area=%s",
-            device_class, target_area_id,
-        )
-        return None
+    entities = _find_all_chart_entities(hass, device_class)
+    if not entities:
+        return {}
 
-    label = f"{area_name} {device_class.replace('_', ' ').title()}"
+    entity_ids = {e["entity_id"] for e in entities}
+    label = CHART_SENSOR_LABELS.get(device_class, device_class.replace("_", " ").title())
+    unit = entities[0]["unit"]
     now = dt_util.now()
+    result: dict = {}
 
     try:
-        if chart_type == CHART_TYPE_24H:
-            resolution_h = int(options.get(CONF_CHART_RESOLUTION, "1"))
+        if show_1d:
             stats = await get_instance(hass).async_add_executor_job(
                 statistics_during_period,
                 hass,
                 now - timedelta(hours=24),
                 None,
-                {entity_id},
+                entity_ids,
                 "hour",
                 None,
                 {"mean"},
             )
-            rows = [r for r in stats.get(entity_id, []) if r.mean is not None]
-            sampled = rows[::resolution_h]
-            if not sampled:
-                return None
+            series = []
+            for e in entities:
+                rows = [r for r in stats.get(e["entity_id"], []) if r.mean is not None]
+                if not rows:
+                    continue
+                series.append({
+                    "label": e["area_name"],
+                    "points": [
+                        {
+                            "t": r.start.astimezone(now.tzinfo).strftime("%H:%M"),
+                            "v": round(r.mean, 1),
+                        }
+                        for r in rows
+                    ],
+                })
+            if series:
+                result["chart_1d"] = {"label": label, "unit": unit, "series": series}
 
-            points = [
-                {
-                    "t": r.start.astimezone(now.tzinfo).strftime("%H:%M"),
-                    "v": round(r.mean, 1),
-                }
-                for r in sampled
-            ]
-            return {"type": "24h", "label": label, "unit": unit, "points": points}
-
-        if chart_type == CHART_TYPE_7DAY:
-            daily_mode = options.get(CONF_CHART_DAILY_MODE, CHART_DAILY_MINMAX)
-            stat_types = (
-                {"mean", "min", "max"} if daily_mode == CHART_DAILY_MINMAX else {"mean"}
-            )
+        if show_7d:
             stats = await get_instance(hass).async_add_executor_job(
                 statistics_during_period,
                 hass,
                 now - timedelta(days=7),
                 None,
-                {entity_id},
+                entity_ids,
                 "day",
                 None,
-                stat_types,
+                {"mean"},
             )
-            rows = stats.get(entity_id, [])
-            if not rows:
-                return None
-
             day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            days = []
-            for r in rows:
-                entry: dict = {
-                    "t": day_names[r.start.astimezone(now.tzinfo).weekday()],
-                    "avg": round(r.mean, 1) if r.mean is not None else None,
-                }
-                if daily_mode == CHART_DAILY_MINMAX:
-                    entry["min"] = round(r.min, 1) if r.min is not None else None
-                    entry["max"] = round(r.max, 1) if r.max is not None else None
-                days.append(entry)
-
-            return {
-                "type": "7day",
-                "mode": daily_mode,
-                "label": label,
-                "unit": unit,
-                "days": days,
-            }
+            series = []
+            for e in entities:
+                rows = [r for r in stats.get(e["entity_id"], []) if r.mean is not None]
+                if not rows:
+                    continue
+                series.append({
+                    "label": e["area_name"],
+                    "points": [
+                        {
+                            "t": day_names[r.start.astimezone(now.tzinfo).weekday()],
+                            "v": round(r.mean, 1),
+                        }
+                        for r in rows
+                    ],
+                })
+            if series:
+                result["chart_7d"] = {"label": label, "unit": unit, "series": series}
 
     except Exception as err:
         _LOGGER.warning("Failed to build chart data: %s", err)
 
-    return None
+    return result

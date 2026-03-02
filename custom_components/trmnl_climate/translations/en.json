@@ -21,17 +21,10 @@
     "step": {
       "init": {
         "title": "Chart Settings",
-        "description": "Configure a history chart shown alongside the current sensor values. Requires the HA Recorder integration and sensors with long-term statistics enabled.",
+        "description": "Show sensor history charts alongside current values. Requires the HA Recorder integration.",
         "data": {
-          "chart_type": "Chart type",
-          "chart_sensor": "Sensor to chart",
-          "chart_area": "Area (leave blank to auto-select)",
-          "chart_resolution": "24h resolution",
-          "chart_daily_mode": "7-day data mode"
-        },
-        "data_description": {
-          "chart_resolution": "Applies to 24h trend chart only.",
-          "chart_daily_mode": "Applies to 7-day averages chart only."
+          "show_1day": "Show 24h history chart",
+          "show_7day": "Show 7-day history chart"
         }
       }
     }

@@ -18,22 +18,16 @@ SENSOR_DISPLAY_ORDER = [
 
 CLIMATE_DEVICE_CLASSES = frozenset(SENSOR_DISPLAY_ORDER)
 
-# Chart options
-CONF_CHART_TYPE = "chart_type"
-CONF_CHART_SENSOR = "chart_sensor"
-CONF_CHART_AREA = "chart_area"
-CONF_CHART_RESOLUTION = "chart_resolution"
-CONF_CHART_DAILY_MODE = "chart_daily_mode"
+# Chart options — just two toggles
+CONF_SHOW_1DAY = "show_1day"
+CONF_SHOW_7DAY = "show_7day"
 
-CHART_TYPE_DISABLED = "disabled"
-CHART_TYPE_24H = "24h_trend"
-CHART_TYPE_7DAY = "7day_averages"
+# Auto-detect sensor type in priority order
+CHART_SENSOR_PRIORITY = ["temperature", "humidity", "carbon_dioxide", "pressure"]
 
-CHART_RESOLUTION_1H = "1"
-CHART_RESOLUTION_2H = "2"
-CHART_RESOLUTION_6H = "6"
-
-CHART_DAILY_AVERAGE = "average"
-CHART_DAILY_MINMAX = "minmax"
-
-CHART_SENSOR_OPTIONS = ["temperature", "humidity", "carbon_dioxide", "pressure"]
+CHART_SENSOR_LABELS = {
+    "temperature": "Temperature",
+    "humidity": "Humidity",
+    "carbon_dioxide": "CO₂",
+    "pressure": "Pressure",
+}
