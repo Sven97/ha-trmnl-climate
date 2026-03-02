@@ -210,54 +210,75 @@ def _pick_device_class(hass: HomeAssistant) -> str | None:
     return None
 
 
-def _bin_hourly(entity_states: list, start, tz) -> list[dict]:
-    """Bucket state history into hourly averages."""
-    buckets: dict[int, list[float]] = defaultdict(list)
+def _build_aligned_series(
+    states_map: dict,
+    entities: list[dict],
+    bucket_fn,
+    max_buckets: int,
+    start,
+    tz,
+) -> tuple[list[str], list[dict]]:
+    """
+    Bucket each entity's states, find the union of bucket keys with data,
+    then return (labels, series) where every series data array is aligned
+    to the same labels — None for buckets with no data in that series.
+    """
+    # Collect buckets per entity: {entity_id: {bucket_key: [values]}}
+    entity_buckets: dict[str, dict[int, list[float]]] = {}
+    all_keys: set[int] = set()
+
+    for e in entities:
+        raw = states_map.get(e["entity_id"], [])
+        buckets: dict[int, list[float]] = defaultdict(list)
+        for s in raw:
+            try:
+                v = float(s.state)
+            except (ValueError, AttributeError):
+                continue
+            key = bucket_fn(s.last_changed.astimezone(tz), start.astimezone(tz))
+            if 0 <= key < max_buckets:
+                buckets[key].append(v)
+                all_keys.add(key)
+        entity_buckets[e["entity_id"]] = buckets
+
+    if not all_keys:
+        return [], []
+
+    sorted_keys = sorted(all_keys)
+
+    # Build x-axis labels from keys
     start_local = start.astimezone(tz)
+    if max_buckets == 24:
+        labels = [
+            (start_local + timedelta(hours=k)).strftime("%H:%M")
+            for k in sorted_keys
+        ]
+    else:
+        labels = [
+            _DAY_NAMES[(start_local + timedelta(days=k)).weekday()]
+            for k in sorted_keys
+        ]
 
-    for s in entity_states:
-        try:
-            v = float(s.state)
-        except (ValueError, AttributeError):
-            continue
-        lc = s.last_changed.astimezone(tz)
-        hour_key = int((lc - start_local).total_seconds() // 3600)
-        if 0 <= hour_key < 24:
-            buckets[hour_key].append(v)
+    # Build per-series aligned data arrays (None = no data for that bucket)
+    series = []
+    for e in entities:
+        buckets = entity_buckets[e["entity_id"]]
+        data = [
+            round(sum(buckets[k]) / len(buckets[k]), 1) if k in buckets else None
+            for k in sorted_keys
+        ]
+        if any(v is not None for v in data):
+            series.append({"label": e["area_name"], "data": data})
 
-    return [
-        {
-            "t": (start_local + timedelta(hours=h)).strftime("%H:%M"),
-            "v": round(sum(vals) / len(vals), 1),
-        }
-        for h, vals in sorted(buckets.items())
-    ]
+    return labels, series
 
 
-def _bin_daily(entity_states: list, start, tz) -> list[dict]:
-    """Bucket state history into daily averages."""
-    buckets: dict[int, list[float]] = defaultdict(list)
-    weekdays: dict[int, int] = {}
-    start_local = start.astimezone(tz)
+def _hour_key(dt_local, start_local) -> int:
+    return int((dt_local - start_local).total_seconds() // 3600)
 
-    for s in entity_states:
-        try:
-            v = float(s.state)
-        except (ValueError, AttributeError):
-            continue
-        lc = s.last_changed.astimezone(tz)
-        day_key = int((lc - start_local).total_seconds() // 86400)
-        if 0 <= day_key < 7:
-            buckets[day_key].append(v)
-            weekdays[day_key] = lc.weekday()
 
-    return [
-        {
-            "t": _DAY_NAMES[weekdays[d]],
-            "v": round(sum(vals) / len(vals), 1),
-        }
-        for d, vals in sorted(buckets.items())
-    ]
+def _day_key(dt_local, start_local) -> int:
+    return int((dt_local - start_local).total_seconds() // 86400)
 
 
 async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
@@ -295,45 +316,27 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
             start = now - timedelta(hours=24)
             states_map = await get_instance(hass).async_add_executor_job(
                 get_significant_states,
-                hass,
-                start,
-                now,
-                entity_ids,
-                None,   # filters
-                True,   # include_start_time_state
-                False,  # significant_changes_only — include all recorded values
-                False,  # minimal_response
-                True,   # no_attributes
+                hass, start, now, entity_ids,
+                None, True, False, False, True,
             )
-            series = []
-            for e in entities:
-                points = _bin_hourly(states_map.get(e["entity_id"], []), start, tz)
-                if points:
-                    series.append({"label": e["area_name"], "points": points})
+            labels, series = _build_aligned_series(
+                states_map, entities, _hour_key, 24, start, tz
+            )
             if series:
-                result["chart_1d"] = {"label": label, "unit": unit, "series": series}
+                result["chart_1d"] = {"label": label, "unit": unit, "labels": labels, "series": series}
 
         if show_7d:
             start = now - timedelta(days=7)
             states_map = await get_instance(hass).async_add_executor_job(
                 get_significant_states,
-                hass,
-                start,
-                now,
-                entity_ids,
-                None,
-                True,
-                False,
-                False,
-                True,
+                hass, start, now, entity_ids,
+                None, True, False, False, True,
             )
-            series = []
-            for e in entities:
-                points = _bin_daily(states_map.get(e["entity_id"], []), start, tz)
-                if points:
-                    series.append({"label": e["area_name"], "points": points})
+            labels, series = _build_aligned_series(
+                states_map, entities, _day_key, 7, start, tz
+            )
             if series:
-                result["chart_7d"] = {"label": label, "unit": unit, "series": series}
+                result["chart_7d"] = {"label": label, "unit": unit, "labels": labels, "series": series}
 
     except Exception as err:
         _LOGGER.warning("Failed to build chart data: %s", err)

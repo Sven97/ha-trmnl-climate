@@ -1,55 +1,90 @@
 <style>
   @import url('https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css');
-  .sensor-value { font-weight: 600 !important; }
-  .sensor-row { display: flex; align-items: center; gap: 0.4em; }
-  .sensor-icon { font-size: 1.6em; line-height: 1; }
-  .title_bar { background: none !important; border-top: none !important; }
-  .split { display: grid; grid-template-columns: 1fr 1fr; height: calc(100% - 36px); overflow: hidden; }
-  .split__left { border-right: 1px solid #ccc; overflow: hidden; }
+
+  /* ── left panel: responsive grid of area cards ── */
+  .areas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 6px;
+    padding: 8px;
+    align-content: start;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .area-card { }
+  .area-name {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sensor-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.5;
+  }
+  .sensor-row .mdi { font-size: 1.1em; }
+  .sensor-val { font-size: 0.85em; font-weight: 600; }
+
+  /* ── split layout ── */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: calc(100% - 36px);
+    overflow: hidden;
+  }
+  .split__left  { border-right: 1px solid #ccc; overflow: hidden; }
   .split__right { display: flex; flex-direction: column; overflow: hidden; }
-  .chart-block { flex: 1; display: flex; flex-direction: column; padding: 8px; min-height: 0; }
+  .chart-block  {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 6px 2px;
+    min-height: 0;
+  }
   .chart-block + .chart-block { border-top: 1px solid #ccc; }
-  .chart-label { font-size: 11px; font-weight: 600; margin: 0 0 4px 0; }
+  .chart-heading {
+    font-size: 10px;
+    font-weight: 600;
+    margin: 0 0 2px 0;
+    white-space: nowrap;
+  }
+
+  /* ── title bar ── */
+  .title_bar { background: none !important; border-top: none !important; }
 </style>
 
 {% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
 
-{% capture areas_html %}
+{% capture areas_panel %}
+<div class="areas-grid">
   {% if areas == empty %}
-    <div class="item">
-      <div class="content">
-        <span class="title">No climate sensors found</span>
-        <span class="description">Assign sensors to areas in Home Assistant.</span>
-      </div>
-    </div>
+  <div style="grid-column:1/-1;font-size:12px;opacity:0.6;">No climate sensors found in any area.</div>
   {% else %}
-    <div class="columns">
-      {% for area in areas %}
-      <div class="column">
-        <div class="item">
-          <div class="content">
-            <span class="title title--small">{{ area.area }}</span>
-          </div>
-        </div>
-        {% for sensor in area.sensors %}
-        {% assign sensor_icon = 'mdi-gauge' %}
-        {% for pair in icon_map %}
-          {% assign parts = pair | split: ':' %}
-          {% if parts[0] == sensor.device_class %}{% assign sensor_icon = parts[1] %}{% break %}{% endif %}
-        {% endfor %}
-        <div class="item">
-          <div class="content">
-            <div class="sensor-row">
-              <span class="mdi {{ sensor_icon }} sensor-icon"></span>
-              <span class="value value--tnums sensor-value" data-value-fit="true">{{ sensor.state }}{{ sensor.unit }}</span>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% endfor %}
+  {% for area in areas %}
+  <div class="area-card">
+    <div class="area-name">{{ area.area }}</div>
+    {% for sensor in area.sensors %}
+    {% assign sensor_icon = 'mdi-gauge' %}
+    {% for pair in icon_map %}
+      {% assign kv = pair | split: ':' %}
+      {% if kv[0] == sensor.device_class %}{% assign sensor_icon = kv[1] %}{% break %}{% endif %}
+    {% endfor %}
+    <div class="sensor-row">
+      <span class="mdi {{ sensor_icon }}"></span>
+      <span class="sensor-val">{{ sensor.state }}{{ sensor.unit }}</span>
     </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
   {% endif %}
+</div>
 {% endcapture %}
 
 <div class="screen">
@@ -58,107 +93,79 @@
     {% if chart_1d or chart_7d %}
 
     <div class="split">
-      <div class="split__left">
-        {{ areas_html }}
-      </div>
+      <div class="split__left">{{ areas_panel }}</div>
       <div class="split__right">
-
-        {% assign dash_styles = 'Solid,Dash,Dot,DashDot,LongDash' | split: ',' %}
 
         {% if chart_1d %}
         <div class="chart-block">
-          <p class="chart-label">{{ chart_1d.label }} 24h ({{ chart_1d.unit }})</p>
-          <div id="chart-1d" style="flex: 1; min-height: 0;"></div>
+          <p class="chart-heading">{{ chart_1d.label }} — 24 h ({{ chart_1d.unit }})</p>
+          <div id="c1d" style="flex:1;min-height:0;"></div>
         </div>
         {% endif %}
 
         {% if chart_7d %}
         <div class="chart-block">
-          <p class="chart-label">{{ chart_7d.label }} 7d ({{ chart_7d.unit }})</p>
-          <div id="chart-7d" style="flex: 1; min-height: 0;"></div>
+          <p class="chart-heading">{{ chart_7d.label }} — 7 d ({{ chart_7d.unit }})</p>
+          <div id="c7d" style="flex:1;min-height:0;"></div>
         </div>
         {% endif %}
 
         <script src="https://code.highcharts.com/highcharts.js"></script>
         <script>
         (function () {
-          var commonOpts = {
+          var dashStyles = ['Solid','Dash','Dot','DashDot','LongDash'];
+          var axisLbl = { style: { fontSize: '9px', color: '#333' } };
+          var base = {
             animation: false,
             backgroundColor: 'transparent',
-            margin: [8, 8, 28, 36],
-            style: { fontFamily: 'inherit' }
+            margin: [4, 6, 22, 32],
+            style: { fontFamily: 'inherit', fontSize: '9px' }
           };
-          var axisStyle = { style: { fontSize: '10px', color: '#333' } };
-          var credits = { enabled: false };
-          var legend = { enabled: true, itemStyle: { fontSize: '9px', fontWeight: 'normal' } };
-          var dashStyles = ['Solid', 'Dash', 'Dot', 'DashDot', 'LongDash'];
 
-          {% if chart_1d %}
-          Highcharts.chart('chart-1d', {
-            chart: Object.assign({ type: 'line' }, commonOpts),
-            title: { text: null },
-            credits: credits,
-            legend: legend,
-            xAxis: {
-              {% assign first_1d = chart_1d.series | first %}
-              categories: [{% for p in first_1d.points %}"{{ p.t }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
-              tickInterval: {% if first_1d.points.size > 18 %}6{% elsif first_1d.points.size > 12 %}4{% elsif first_1d.points.size > 6 %}2{% else %}1{% endif %},
-              labels: axisStyle,
-              lineColor: '#ccc',
-              tickColor: '#ccc'
-            },
-            yAxis: {
-              title: { text: null },
-              labels: axisStyle,
-              gridLineColor: '#eee'
-            },
-            series: [
-              {% for s in chart_1d.series %}
-              {
-                name: "{{ s.label }}",
-                data: [{% for p in s.points %}{{ p.v }}{% unless forloop.last %},{% endunless %}{% endfor %}],
+          function makeSeries(arr) {
+            return arr.map(function (s, i) {
+              return {
+                name: s.label,
+                data: s.data,   /* already aligned; null = no data */
                 color: '#000',
                 lineWidth: 1.5,
-                dashStyle: dashStyles[{{ forloop.index0 }} % dashStyles.length],
-                marker: { enabled: false }
-              }{% unless forloop.last %},{% endunless %}
-              {% endfor %}
-            ],
-            tooltip: { valueSuffix: ' {{ chart_1d.unit }}', shared: true }
+                dashStyle: dashStyles[i % dashStyles.length],
+                marker: { enabled: false },
+                connectNulls: false
+              };
+            });
+          }
+
+          {% if chart_1d %}
+          Highcharts.chart('c1d', {
+            chart: Object.assign({ type: 'line' }, base),
+            title: { text: null },
+            credits: { enabled: false },
+            legend: { enabled: true, itemStyle: { fontSize: '8px', fontWeight: 'normal', color: '#000' } },
+            xAxis: {
+              categories: [{% for l in chart_1d.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+              labels: Object.assign({ step: Math.ceil({{ chart_1d.labels | size }} / 6) }, axisLbl),
+              lineColor: '#ccc', tickColor: '#ccc'
+            },
+            yAxis: { title: { text: null }, labels: axisLbl, gridLineColor: '#eee' },
+            tooltip: { valueSuffix: ' {{ chart_1d.unit }}', shared: true },
+            series: makeSeries([{% for s in chart_1d.series %}{ label: "{{ s.label }}", data: [{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}] }{% unless forloop.last %},{% endunless %}{% endfor %}])
           });
           {% endif %}
 
           {% if chart_7d %}
-          Highcharts.chart('chart-7d', {
-            chart: Object.assign({ type: 'line' }, commonOpts),
+          Highcharts.chart('c7d', {
+            chart: Object.assign({ type: 'line' }, base),
             title: { text: null },
-            credits: credits,
-            legend: legend,
+            credits: { enabled: false },
+            legend: { enabled: true, itemStyle: { fontSize: '8px', fontWeight: 'normal', color: '#000' } },
             xAxis: {
-              {% assign first_7d = chart_7d.series | first %}
-              categories: [{% for p in first_7d.points %}"{{ p.t }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
-              labels: axisStyle,
-              lineColor: '#ccc',
-              tickColor: '#ccc'
+              categories: [{% for l in chart_7d.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+              labels: axisLbl, lineColor: '#ccc', tickColor: '#ccc'
             },
-            yAxis: {
-              title: { text: null },
-              labels: axisStyle,
-              gridLineColor: '#eee'
-            },
-            series: [
-              {% for s in chart_7d.series %}
-              {
-                name: "{{ s.label }}",
-                data: [{% for p in s.points %}{{ p.v }}{% unless forloop.last %},{% endunless %}{% endfor %}],
-                color: '#000',
-                lineWidth: 1.5,
-                dashStyle: dashStyles[{{ forloop.index0 }} % dashStyles.length],
-                marker: { radius: 3, enabled: true, fillColor: '#000' }
-              }{% unless forloop.last %},{% endunless %}
-              {% endfor %}
-            ],
-            tooltip: { valueSuffix: ' {{ chart_7d.unit }}', shared: true }
+            yAxis: { title: { text: null }, labels: axisLbl, gridLineColor: '#eee' },
+            tooltip: { valueSuffix: ' {{ chart_7d.unit }}', shared: true },
+            series: makeSeries([{% for s in chart_7d.series %}{ label: "{{ s.label }}", data: [{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}] }{% unless forloop.last %},{% endunless %}{% endfor %}])
           });
           {% endif %}
         }());
@@ -168,8 +175,8 @@
 
     {% else %}
 
-    <div class="layout">
-      {{ areas_html }}
+    <div class="layout" style="padding:8px;">
+      {{ areas_panel }}
     </div>
 
     {% endif %}
