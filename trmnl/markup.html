@@ -105,7 +105,7 @@
 <script>
 (function () {
   var DASH = ['Solid', 'Dash', 'Dot', 'DashDot', 'LongDash'];
-  var axisLabel = { style: { fontSize: '9px', color: '#000' } };
+  var axisLabel = { style: { fontSize: '11px', color: '#000' } };
 
   Highcharts.chart('chart-main', {
     chart: {
@@ -113,7 +113,7 @@
       height: 265,
       animation: false,
       backgroundColor: 'transparent',
-      margin: [4, 52, 22, 42],
+      spacing: [10, 10, 5, 10],
       style: { fontFamily: 'inherit' }
     },
     title:   { text: null },
@@ -121,7 +121,7 @@
     tooltip: { enabled: false },
     legend:  {
       enabled: true,
-      itemStyle: { fontSize: '8px', fontWeight: 'normal', color: '#000' },
+      itemStyle: { fontSize: '10px', fontWeight: 'normal', color: '#000' },
       margin: 4
     },
     xAxis: {
@@ -155,7 +155,7 @@
         yAxis: {{ s.y_axis }},
         data: [{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}],
         color: '#000',
-        lineWidth: 1.5,
+        lineWidth: 2,
         dashStyle: DASH[{{ forloop.index0 }} % 5],
         marker: { enabled: false },
         connectNulls: false
