@@ -3,12 +3,26 @@
   .item .meta { background: none !important; box-shadow: none !important; }
   .title_bar  { background: none !important; border-top: none !important; }
 
+  /* Values layout */
+  .areas-wrap {
+    display: flex;
+    align-items: center;
+    height: calc(100% - 36px);
+    padding: 0 8px;
+  }
+  .area-col {
+    flex: 1;
+    min-width: 0;
+  }
+  .sensor-icon { font-size: 1.5em; }
+
   /* Narrow slots: wrap into 2 columns, center rows as a group */
   .view--half_vertical .areas-wrap,
   .view--quadrant .areas-wrap {
     flex-wrap: wrap;
     align-content: center;
   }
+  .view--half_vertical .areas-wrap { row-gap: 20px; }
   .view--half_vertical .area-col,
   .view--quadrant .area-col {
     flex: none !important;
@@ -16,26 +30,53 @@
     box-sizing: border-box;
   }
 
-  /* Half vertical: breathing room between the 2 area rows */
-  .view--half_vertical .areas-wrap {
-    row-gap: 20px;
-  }
-
-  /* Quadrant: scale down content to fit 4 areas in 240px height.
-     Use high-specificity selectors to beat TRMNL's framework CSS
-     even if it uses !important on .value. */
+  /* Quadrant: scale down to fit 4 areas in limited height */
   html body .view--quadrant .value,
   html body .view--quadrant .value--tnums {
     font-size: 1.5rem !important;
     line-height: 1.15 !important;
   }
-  html body .view--quadrant .label {
-    font-size: 0.85rem !important;
-  }
+  html body .view--quadrant .label { font-size: 0.85rem !important; }
   html body .view--quadrant .item {
     min-height: 0 !important;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
+  }
+
+  /* Gauge layout */
+  .gauge-wrap {
+    display: flex;
+    flex-direction: column;
+    height: calc(100% - 36px);
+    padding: 8px;
+  }
+  .gauge-title {
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  .gauge-row {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+  .gauge-cell {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+  }
+  .gauge-dial {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+  }
+  .gauge-area { text-align: center; }
+
+  /* Line chart layout */
+  .chart-wrap {
+    height: calc(100% - 36px);
+    padding: 8px 8px 0;
   }
 </style>
 
@@ -43,6 +84,9 @@
 
 {% assign has_chart = false %}
 {% if chart %}{% assign has_chart = true %}{% endif %}
+
+{% assign chart_id    = 'chart'  | append_random %}
+{% assign gauge_prefix = 'gauge' | append_random %}
 
 {% if areas == empty %}
 
@@ -57,10 +101,10 @@
 
 {% elsif has_chart == false %}
 
-{% comment %} Values mode: single row on wide slots, 2×2 grid on narrow slots, vertically centered {% endcomment %}
-<div class="areas-wrap" style="display: flex; align-items: center; height: calc(100% - 36px); padding: 0 8px;">
+{% comment %} Values mode: single row on wide slots, 2×2 grid on narrow slots {% endcomment %}
+<div class="areas-wrap">
   {% for area in areas %}
-  <div class="area-col" style="flex: 1; min-width: 0;">
+  <div class="area-col">
     <div class="item">
       <div class="content"><span class="label">{{ area.area }}</span></div>
     </div>
@@ -71,7 +115,7 @@
       {% if kv[0] == sensor.device_class %}{% assign sensor_icon = kv[1] %}{% break %}{% endif %}
     {% endfor %}
     <div class="item">
-      <div class="meta"><span class="mdi {{ sensor_icon }}" style="font-size: 1.5em;"></span></div>
+      <div class="meta"><span class="mdi {{ sensor_icon }} sensor-icon"></span></div>
       <div class="content"><span class="value value--tnums">{{ sensor.state }}{{ sensor.unit }}</span></div>
     </div>
     {% endfor %}
@@ -82,13 +126,13 @@
 {% elsif chart.type == 'gauge' %}
 
 {% comment %} Gauge mode: row of dials {% endcomment %}
-<div style="display: flex; flex-direction: column; height: calc(100% - 36px); padding: 8px;">
-  <span class="label" style="text-align: center; margin-bottom: 4px;">{{ chart.title }}</span>
-  <div style="display: flex; flex: 1; min-height: 0;">
+<div class="gauge-wrap">
+  <span class="label gauge-title">{{ chart.title }}</span>
+  <div class="gauge-row">
     {% for g in chart.gauges %}
-    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0;">
-      <div id="gauge-{{ forloop.index0 }}" style="flex: 1; width: 100%; min-height: 0;"></div>
-      <span class="description" style="text-align: center;">{{ g.area }}</span>
+    <div class="gauge-cell">
+      <div id="{{ gauge_prefix }}-{{ forloop.index0 }}" class="gauge-dial"></div>
+      <span class="description gauge-area">{{ g.area }}</span>
     </div>
     {% endfor %}
   </div>
@@ -97,7 +141,7 @@
 {% else %}
 
 {% comment %} Line chart mode {% endcomment %}
-<div id="chart-main" style="height: calc(100% - 36px); padding: 8px 8px 0;"></div>
+<div id="{{ chart_id }}" class="chart-wrap"></div>
 
 {% endif %}
 
@@ -123,9 +167,10 @@
   var axisLabel = { style: { fontSize: '13px', color: '#000000', fontFamily: FONT_MONO } };
 
   {% if chart.type == 'gauge' %}
+  var gaugePrefix = '{{ gauge_prefix }}';
   var gauges = [{% for g in chart.gauges %}{area:"{{ g.area }}",value:{{ g.value }}}{% unless forloop.last %},{% endunless %}{% endfor %}];
   gauges.forEach(function(g, i) {
-    Highcharts.chart('gauge-' + i, {
+    Highcharts.chart(gaugePrefix + '-' + i, {
       chart: { type: 'gauge', animation: false, backgroundColor: 'transparent',
                spacing: [0, 0, 0, 0], style: { fontFamily: FONT_MONO } },
       title: { text: null }, credits: { enabled: false }, tooltip: { enabled: false },
@@ -153,7 +198,7 @@
   });
   {% else %}
   var series = [{% for s in chart.series %}{label:"{{ s.label }}",data:[{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}]}{% unless forloop.last %},{% endunless %}{% endfor %}];
-  Highcharts.chart('chart-main', {
+  Highcharts.chart('{{ chart_id }}', {
     chart: { type: 'spline', animation: false, backgroundColor: 'transparent',
              spacing: [8, 8, 4, 8], marginRight: 65, style: { fontFamily: FONT_MONO } },
     title:   { text: "{{ chart.title }}", style: { fontSize: '12px', fontFamily: FONT_SANS, fontWeight: 'normal' }, margin: 4 },
@@ -186,7 +231,7 @@
 {% endif %}
 
 <script>
-/* Quadrant: JS fallback to scale values — inline setProperty beats all stylesheet rules */
+/* Quadrant: JS fallback to scale values — setProperty('important') beats all stylesheet rules */
 (function () {
   if (!document.querySelector('.view--quadrant')) return;
   document.querySelectorAll('.value, .value--tnums').forEach(function (el) {
