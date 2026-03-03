@@ -21,19 +21,24 @@
     "step": {
       "init": {
         "title": "Display & Push Settings",
-        "description": "Show 24-hour sensor history charts alongside current values. Requires the HA Recorder integration.",
+        "description": "Configure charts and push interval. Requires the HA Recorder integration for line/bar charts.",
         "data": {
-          "show_chart": "Show history charts",
-          "area_filter": "Chart areas",
-          "chart_sensor_types": "Sensor types in chart",
+          "chart_count": "Number of charts",
           "chart_hours": "Chart history window",
-          "push_interval": "Update interval (minutes)"
+          "push_interval": "Update interval (minutes)",
+          "chart1_sensor_type": "Chart 1 — sensor type",
+          "chart1_areas": "Chart 1 — areas (empty = all)",
+          "chart1_type": "Chart 1 — chart type",
+          "chart2_sensor_type": "Chart 2 — sensor type",
+          "chart2_areas": "Chart 2 — areas (empty = all)",
+          "chart2_type": "Chart 2 — chart type"
         },
         "data_description": {
-          "area_filter": "Leave empty to chart all areas. Current sensor values always show all areas.",
-          "chart_sensor_types": "Leave empty to chart all sensor types. Selecting fewer reduces chart clutter.",
-          "chart_hours": "How many hours of history to show.",
-          "push_interval": "How often data is sent to your TRMNL device."
+          "chart_count": "How many charts to show below the sensor values.",
+          "chart_hours": "How many hours of history to show (line and bar charts only).",
+          "push_interval": "How often data is sent to your TRMNL device.",
+          "chart1_areas": "Leave empty to include all areas in Chart 1.",
+          "chart2_areas": "Leave empty to include all areas in Chart 2."
         }
       }
     }

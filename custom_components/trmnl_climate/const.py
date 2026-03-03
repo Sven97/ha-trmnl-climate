@@ -2,8 +2,6 @@ DOMAIN = "trmnl_climate"
 
 CONF_WEBHOOK_URL = "webhook_url"
 
-PUSH_INTERVAL_MINUTES = 15
-
 SENSOR_DISPLAY_ORDER = [
     "temperature",
     "humidity",
@@ -18,30 +16,32 @@ SENSOR_DISPLAY_ORDER = [
 
 CLIMATE_DEVICE_CLASSES = frozenset(SENSOR_DISPLAY_ORDER)
 
-# Single toggle: enable 24h history charts
-CONF_SHOW_CHART = "show_chart"
+# Chart count
+CONF_CHART_COUNT = "chart_count"
 
-CONF_AREA_FILTER = "area_filter"
-CONF_CHART_SENSOR_TYPES = "chart_sensor_types"
+# Chart 1
+CONF_CHART1_SENSOR_TYPE = "chart1_sensor_type"
+CONF_CHART1_AREAS = "chart1_areas"
+CONF_CHART1_TYPE = "chart1_type"
+
+# Chart 2
+CONF_CHART2_SENSOR_TYPE = "chart2_sensor_type"
+CONF_CHART2_AREAS = "chart2_areas"
+CONF_CHART2_TYPE = "chart2_type"
+
+# Shared
 CONF_CHART_HOURS = "chart_hours"
 CONF_PUSH_INTERVAL = "push_interval"
 
-# Chart order (controls series order in the combined chart)
-CHART_SENSOR_ORDER = SENSOR_DISPLAY_ORDER
-
-# Device classes that go on the RIGHT y-axis (opposite: true).
-# Everything else uses the LEFT y-axis.
-CHART_YAXIS_RIGHT = {"humidity"}
-
-# Short labels appended to area name when multiple sensor types are charted.
-CHART_TYPE_SHORT = {
-    "temperature":                "temp",
-    "humidity":                   "hum",
-    "carbon_dioxide":             "CO₂",
-    "pressure":                   "hPa",
-    "pm25":                       "PM2.5",
-    "pm10":                       "PM10",
-    "volatile_organic_compounds": "VOC",
-    "nitrogen_dioxide":           "NO₂",
-    "carbon_monoxide":            "CO",
+# Gauge y-axis ranges per sensor type
+GAUGE_RANGES = {
+    "temperature":                (0, 40),
+    "humidity":                   (0, 100),
+    "carbon_dioxide":             (400, 2000),
+    "pressure":                   (960, 1040),
+    "pm25":                       (0, 150),
+    "pm10":                       (0, 200),
+    "volatile_organic_compounds": (0, 500),
+    "nitrogen_dioxide":           (0, 200),
+    "carbon_monoxide":            (0, 100),
 }

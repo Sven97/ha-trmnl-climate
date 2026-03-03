@@ -17,11 +17,15 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
-    CONF_AREA_FILTER,
+    CONF_CHART_COUNT,
     CONF_CHART_HOURS,
-    CONF_CHART_SENSOR_TYPES,
+    CONF_CHART1_AREAS,
+    CONF_CHART1_SENSOR_TYPE,
+    CONF_CHART1_TYPE,
+    CONF_CHART2_AREAS,
+    CONF_CHART2_SENSOR_TYPE,
+    CONF_CHART2_TYPE,
     CONF_PUSH_INTERVAL,
-    CONF_SHOW_CHART,
     CONF_WEBHOOK_URL,
     DOMAIN,
     SENSOR_DISPLAY_ORDER,
@@ -89,29 +93,31 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
             {"value": dc, "label": dc.replace("_", " ").title()}
             for dc in SENSOR_DISPLAY_ORDER
         ]
+        chart_count_options = [
+            {"value": "0", "label": "No charts"},
+            {"value": "1", "label": "1 chart"},
+            {"value": "2", "label": "2 charts"},
+        ]
         chart_hours_options = [
             {"value": "6", "label": "6 h"},
             {"value": "12", "label": "12 h"},
             {"value": "24", "label": "24 h"},
+        ]
+        chart_type_options = [
+            {"value": "line", "label": "Line"},
+            {"value": "bar", "label": "Bar"},
+            {"value": "gauge", "label": "Gauge"},
         ]
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
                 vol.Required(
-                    CONF_SHOW_CHART,
-                    default=opts.get(CONF_SHOW_CHART, False),
-                ): selector.BooleanSelector(),
-                vol.Optional(
-                    CONF_AREA_FILTER,
-                    default=opts.get(CONF_AREA_FILTER, []),
-                ): AreaSelector(AreaSelectorConfig(multiple=True)),
-                vol.Optional(
-                    CONF_CHART_SENSOR_TYPES,
-                    default=opts.get(CONF_CHART_SENSOR_TYPES, []),
+                    CONF_CHART_COUNT,
+                    default=opts.get(CONF_CHART_COUNT, "0"),
                 ): SelectSelector(SelectSelectorConfig(
-                    options=sensor_type_options,
-                    multiple=True,
+                    options=chart_count_options,
+                    multiple=False,
                     mode=SelectSelectorMode.LIST,
                 )),
                 vol.Optional(
@@ -130,6 +136,46 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
                     max=60,
                     step=5,
                     mode=NumberSelectorMode.BOX,
+                )),
+                vol.Optional(
+                    CONF_CHART1_SENSOR_TYPE,
+                    default=opts.get(CONF_CHART1_SENSOR_TYPE, "temperature"),
+                ): SelectSelector(SelectSelectorConfig(
+                    options=sensor_type_options,
+                    multiple=False,
+                    mode=SelectSelectorMode.LIST,
+                )),
+                vol.Optional(
+                    CONF_CHART1_AREAS,
+                    default=opts.get(CONF_CHART1_AREAS, []),
+                ): AreaSelector(AreaSelectorConfig(multiple=True)),
+                vol.Optional(
+                    CONF_CHART1_TYPE,
+                    default=opts.get(CONF_CHART1_TYPE, "line"),
+                ): SelectSelector(SelectSelectorConfig(
+                    options=chart_type_options,
+                    multiple=False,
+                    mode=SelectSelectorMode.LIST,
+                )),
+                vol.Optional(
+                    CONF_CHART2_SENSOR_TYPE,
+                    default=opts.get(CONF_CHART2_SENSOR_TYPE, "humidity"),
+                ): SelectSelector(SelectSelectorConfig(
+                    options=sensor_type_options,
+                    multiple=False,
+                    mode=SelectSelectorMode.LIST,
+                )),
+                vol.Optional(
+                    CONF_CHART2_AREAS,
+                    default=opts.get(CONF_CHART2_AREAS, []),
+                ): AreaSelector(AreaSelectorConfig(multiple=True)),
+                vol.Optional(
+                    CONF_CHART2_TYPE,
+                    default=opts.get(CONF_CHART2_TYPE, "line"),
+                ): SelectSelector(SelectSelectorConfig(
+                    options=chart_type_options,
+                    multiple=False,
+                    mode=SelectSelectorMode.LIST,
                 )),
             }),
         )
