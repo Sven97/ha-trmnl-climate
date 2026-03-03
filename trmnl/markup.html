@@ -104,12 +104,12 @@
 <script src="https://trmnl.com/js/highcharts/12.3.0/highcharts.js"></script>
 <script>
 (function () {
-  var DASH = ['Solid', 'Dash', 'Dot', 'DashDot', 'LongDash'];
+  var FILLS = ['rgba(0,0,0,0.75)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.1)'];
   var axisLabel = { style: { fontSize: '11px', color: '#000' } };
 
   Highcharts.chart('chart-main', {
     chart: {
-      type: 'spline',
+      type: 'columnrange',
       height: 265,
       animation: false,
       backgroundColor: 'transparent',
@@ -146,19 +146,15 @@
       }
     ],
     plotOptions: {
-      series: { animation: false, enableMouseTracking: false }
+      series: { animation: false, enableMouseTracking: false, grouping: false, borderWidth: 0 }
     },
     series: [
       {% for s in chart.series %}
       {
         name: "{{ s.label }}",
         yAxis: {{ s.y_axis }},
-        data: [{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}],
-        color: '#000',
-        lineWidth: 2,
-        dashStyle: DASH[{{ forloop.index0 }} % 5],
-        marker: { enabled: false },
-        connectNulls: false
+        color: FILLS[{{ forloop.index0 }} % 4],
+        data: [{% for v in s.data %}{% if v == nil %}null{% else %}{low:{{ v.low }},high:{{ v.high }}}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}]
       }{% unless forloop.last %},{% endunless %}
       {% endfor %}
     ]

@@ -17,7 +17,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CHART_SENSOR_ORDER,
-    CHART_TYPE_SHORT,
     CHART_YAXIS_RIGHT,
     CLIMATE_DEVICE_CLASSES,
     CONF_AREA_FILTER,
@@ -222,11 +221,14 @@ def _find_chart_entities_by_class(hass: HomeAssistant, options: dict) -> dict[st
 
 async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
     """
-    Build a single combined chart with all sensor types.
+    Build a columnrange chart: one series per sensor type, showing min/max
+    across all charted areas per time bucket.
+
+    Bucket size scales with the time window so there are always 24 bars:
+      24 h → 60-min buckets, 12 h → 30-min buckets, 6 h → 15-min buckets.
 
     Returns {"chart": {labels, left_unit, right_unit, has_right, series}}
-    where each series has {label, y_axis (0=left, 1=right), data}.
-    All series share the same x-axis labels (union of hourly buckets).
+    where each series has {label, y_axis, data: [{low, high} | null]}.
     """
     if not options.get(CONF_SHOW_CHART, False):
         return {}
@@ -260,6 +262,10 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
     ]
 
     chart_hours = int(options.get(CONF_CHART_HOURS, 24))
+    # Always produce 24 buckets regardless of window
+    num_buckets = 24
+    bucket_minutes = chart_hours * 60 // num_buckets  # 60 / 30 / 15
+
     now = dt_util.now()
     tz = now.tzinfo
     start = now - timedelta(hours=chart_hours)
@@ -275,35 +281,35 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         _LOGGER.warning("Failed to fetch chart history: %s", err)
         return {}
 
-    # Bucket all entities into hourly averages
-    entity_buckets: dict[str, dict[int, list[float]]] = {}
-    all_hour_keys: set[int] = set()
+    # Aggregate all values per sensor class (across all areas) into per-bucket lists
+    class_buckets: dict[str, dict[int, list[float]]] = {}
+    all_bucket_keys: set[int] = set()
 
-    for entity_id in all_entity_ids:
-        buckets: dict[int, list[float]] = defaultdict(list)
-        for s in states_map.get(entity_id, []):
-            try:
-                v = float(s.state)
-            except (ValueError, AttributeError):
-                continue
-            key = int((s.last_changed.astimezone(tz) - start_local).total_seconds() // 3600)
-            if 0 <= key < chart_hours:
-                buckets[key].append(v)
-                all_hour_keys.add(key)
-        entity_buckets[entity_id] = buckets
+    for device_class, entities in entities_by_class.items():
+        dc_buckets: dict[int, list[float]] = defaultdict(list)
+        for ent in entities:
+            for s in states_map.get(ent["entity_id"], []):
+                try:
+                    v = float(s.state)
+                except (ValueError, AttributeError):
+                    continue
+                elapsed = (s.last_changed.astimezone(tz) - start_local).total_seconds()
+                key = int(elapsed / (bucket_minutes * 60))
+                if 0 <= key < num_buckets:
+                    dc_buckets[key].append(v)
+                    all_bucket_keys.add(key)
+        class_buckets[device_class] = dict(dc_buckets)
 
-    if not all_hour_keys:
+    if not all_bucket_keys:
         return {}
 
-    sorted_keys = sorted(all_hour_keys)
+    sorted_keys = sorted(all_bucket_keys)
     labels = [
-        (start_local + timedelta(hours=k)).strftime("%H:%M")
+        (start_local + timedelta(minutes=k * bucket_minutes)).strftime("%H:%M")
         for k in sorted_keys
     ]
 
-    # Determine charted classes and y-axis units
     charted_classes = [dc for dc in CHART_SENSOR_ORDER if dc in entities_by_class]
-    multi_type = len(charted_classes) > 1
 
     left_unit = ""
     right_unit = ""
@@ -313,7 +319,6 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         if dc in CHART_YAXIS_RIGHT and not right_unit:
             right_unit = entities_by_class[dc][0]["unit"]
 
-    # Build series aligned to shared labels
     series = []
     has_right = False
 
@@ -322,19 +327,20 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         if y_axis == 1:
             has_right = True
 
-        short = CHART_TYPE_SHORT.get(device_class, device_class)
+        buckets = class_buckets.get(device_class, {})
+        data = []
+        for k in sorted_keys:
+            if k in buckets and buckets[k]:
+                vals = buckets[k]
+                data.append({"low": round(min(vals), 1), "high": round(max(vals), 1)})
+            else:
+                data.append(None)
 
-        for e in entities_by_class[device_class]:
-            buckets = entity_buckets[e["entity_id"]]
-            data = [
-                round(sum(buckets[k]) / len(buckets[k]), 1) if k in buckets else None
-                for k in sorted_keys
-            ]
-            if not any(v is not None for v in data):
-                continue
+        if not any(v is not None for v in data):
+            continue
 
-            label = f"{e['area_name']} {short}" if multi_type else e["area_name"]
-            series.append({"label": label, "y_axis": y_axis, "data": data})
+        label = device_class.replace("_", " ").title()
+        series.append({"label": label, "y_axis": y_axis, "data": data})
 
     if not series:
         return {}
