@@ -41,7 +41,7 @@ PLATFORMS = ["button"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     webhook_url = entry.data[CONF_WEBHOOK_URL]
 
-    async def push_climate_data(_now=None) -> None:
+    async def push_climate_data() -> None:
         options = entry.options
         areas_data = _build_areas_data(hass)
         if not areas_data:
@@ -83,20 +83,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"push": push_climate_data}
 
-    await push_climate_data()
+    # Set up the button entity first so it exists before we try to press it
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Look up the button entity_id so the interval fires it via the service,
+    # recording each push as a button press event in HA history.
+    button_entity_id = er.async_get(hass).async_get_entity_id(
+        "button", DOMAIN, f"{entry.entry_id}_push_button"
+    )
+
+    async def _trigger_push(_now=None) -> None:
+        if button_entity_id:
+            await hass.services.async_call(
+                "button", "press",
+                {"entity_id": button_entity_id},
+                blocking=True,
+            )
+        else:
+            await push_climate_data()
+
+    # Initial push on startup
+    await _trigger_push()
 
     push_interval = int(entry.options.get(CONF_PUSH_INTERVAL, 15))
     entry.async_on_unload(
         async_track_time_interval(
             hass,
-            push_climate_data,
+            _trigger_push,
             timedelta(minutes=push_interval),
         )
     )
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
