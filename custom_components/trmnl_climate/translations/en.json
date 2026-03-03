@@ -21,24 +21,47 @@
     "step": {
       "init": {
         "title": "Display & Push Settings",
-        "description": "Configure charts and push interval. Requires the HA Recorder integration for line/bar charts.",
         "data": {
-          "chart_count": "Number of charts",
-          "chart_hours": "Chart history window",
           "push_interval": "Home Assistant push interval (minutes)",
-          "chart1_sensor_type": "Chart 1 — sensor type",
-          "chart1_areas": "Chart 1 — areas (empty = all)",
-          "chart1_type": "Chart 1 — chart type",
-          "chart2_sensor_type": "Chart 2 — sensor type",
-          "chart2_areas": "Chart 2 — areas (empty = all)",
-          "chart2_type": "Chart 2 — chart type"
+          "chart_count": "Number of charts",
+          "chart_hours": "Chart history window"
         },
         "data_description": {
-          "chart_count": "How many charts to show below the sensor values.",
-          "chart_hours": "How many hours of history to show (line and bar charts only).",
           "push_interval": "Defines how frequently this integration fetches fresh sensor data and pushes it to TRMNL. Independent of the TRMNL device Refresh Rate — both need to be set.",
-          "chart1_areas": "Leave empty to include all areas in Chart 1.",
-          "chart2_areas": "Leave empty to include all areas in Chart 2."
+          "chart_count": "How many charts to show below the sensor values.",
+          "chart_hours": "How many hours of history to show (line and bar charts only)."
+        }
+      },
+      "chart1": {
+        "title": "Chart 1",
+        "data": {
+          "chart1_sensor_type": "Sensor type",
+          "chart1_type": "Chart style"
+        }
+      },
+      "chart1_areas": {
+        "title": "Chart 1 — Areas",
+        "data": {
+          "chart1_areas": "Areas to include"
+        },
+        "data_description": {
+          "chart1_areas": "Leave empty to include all areas."
+        }
+      },
+      "chart2": {
+        "title": "Chart 2",
+        "data": {
+          "chart2_sensor_type": "Sensor type",
+          "chart2_type": "Chart style"
+        }
+      },
+      "chart2_areas": {
+        "title": "Chart 2 — Areas",
+        "data": {
+          "chart2_areas": "Areas to include"
+        },
+        "data_description": {
+          "chart2_areas": "Leave empty to include all areas."
         }
       }
     }
