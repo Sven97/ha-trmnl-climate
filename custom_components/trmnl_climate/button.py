@@ -26,5 +26,5 @@ class TrmnlClimatePushButton(ButtonEntity):
         self._attr_unique_id = f"{entry.entry_id}_push_button"
 
     async def async_press(self) -> None:
-        push = self.hass.data[DOMAIN][self._entry.entry_id]["push"]
-        await push()
+        coordinator = self.hass.data[DOMAIN][self._entry.entry_id]
+        await coordinator.async_refresh()

@@ -12,7 +12,7 @@ from homeassistant.helpers import (
     entity_registry as er,
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -38,12 +38,24 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["button"]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    webhook_url = entry.data[CONF_WEBHOOK_URL]
+class TrmnlPushCoordinator(DataUpdateCoordinator[None]):
+    """Pushes climate data to TRMNL on a schedule; also supports on-demand refresh."""
 
-    async def push_climate_data() -> None:
-        options = entry.options
-        areas_data = _build_areas_data(hass)
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        push_interval = int(entry.options.get(CONF_PUSH_INTERVAL, 15))
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(minutes=push_interval),
+        )
+        self._entry = entry
+
+    async def _async_update_data(self) -> None:
+        webhook_url = self._entry.data[CONF_WEBHOOK_URL]
+        options = self._entry.options
+
+        areas_data = _build_areas_data(self.hass)
         if not areas_data:
             _LOGGER.debug("No climate sensors found in any area — skipping push")
             return
@@ -55,15 +67,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         chart_count = int(options.get(CONF_CHART_COUNT, 0))
         if chart_count >= 1:
-            data = await _build_single_chart(hass, options, 1)
+            data = await _build_single_chart(self.hass, options, 1)
             if data:
                 merge_vars["chart1"] = data
         if chart_count >= 2:
-            data = await _build_single_chart(hass, options, 2)
+            data = await _build_single_chart(self.hass, options, 2)
             if data:
                 merge_vars["chart2"] = data
 
-        session = async_get_clientsession(hass)
+        session = async_get_clientsession(self.hass)
         try:
             async with session.post(
                 webhook_url,
@@ -71,55 +83,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 timeout=10,
             ) as resp:
                 if resp.status not in (200, 201, 202):
-                    _LOGGER.warning(
-                        "TRMNL push failed with status %s: %s",
-                        resp.status,
-                        await resp.text(),
+                    raise UpdateFailed(
+                        f"TRMNL push failed: HTTP {resp.status} — {await resp.text()}"
                     )
-                else:
-                    _LOGGER.debug("TRMNL push successful (%s areas)", len(areas_data))
+        except UpdateFailed:
+            raise
         except Exception as err:
-            _LOGGER.error("Error pushing climate data to TRMNL: %s", err)
+            raise UpdateFailed(f"Error pushing climate data to TRMNL: {err}") from err
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"push": push_climate_data}
+        _LOGGER.debug("TRMNL push successful (%s areas)", len(areas_data))
 
-    # Set up the button entity first so it exists before we try to press it
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    coordinator = TrmnlPushCoordinator(hass, entry)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Look up the button entity_id so the interval fires it via the service,
-    # recording each push as a button press event in HA history.
-    button_entity_id = er.async_get(hass).async_get_entity_id(
-        "button", DOMAIN, f"{entry.entry_id}_push_button"
-    )
-
-    async def _trigger_push(_now=None) -> None:
-        if button_entity_id:
-            await hass.services.async_call(
-                "button", "press",
-                {"entity_id": button_entity_id},
-                blocking=True,
-            )
-        else:
-            await push_climate_data()
-
     # Initial push on startup
-    await _trigger_push()
-
-    push_interval = int(entry.options.get(CONF_PUSH_INTERVAL, 15))
-    entry.async_on_unload(
-        async_track_time_interval(
-            hass,
-            _trigger_push,
-            timedelta(minutes=push_interval),
-        )
-    )
+    await coordinator.async_refresh()
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the entry when options change (picks up new push_interval etc.)."""
+    """Reload when options change (picks up new push_interval etc.)."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
