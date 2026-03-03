@@ -153,27 +153,25 @@
   var axisLabel = { style: { fontSize: '16px', color: '#000000' } };
 
   function buildTimeseriesChart(containerId, chartData) {
-    var isBar = chartData.type === 'bar';
     Highcharts.chart(containerId, {
       chart: {
-        type: isBar ? 'column' : 'spline',
+        type: chartData.type === 'bar' ? 'column' : 'spline',
         animation: false,
         backgroundColor: 'transparent',
         spacing: [10, 10, 5, 10],
         marginLeft: 65,
-        marginRight: 65,
         style: { fontFamily: 'inherit' }
       },
       title:   { text: null },
       credits: { enabled: false },
       tooltip: { enabled: false },
-      legend:  {
+      legend: {
         enabled: true,
-        layout: 'vertical',
-        align: 'right',
-        verticalAlign: 'middle',
-        itemStyle: { fontSize: '11px', fontWeight: 'normal', color: '#000' },
-        margin: 0
+        layout: 'horizontal',
+        align: 'center',
+        verticalAlign: 'bottom',
+        itemStyle: { fontSize: '10px', fontWeight: 'normal', color: '#000' },
+        margin: 4
       },
       xAxis: {
         categories: chartData.labels,
@@ -213,16 +211,15 @@
 
   function buildGaugeCharts(gaugeData) {
     gaugeData.gauges.forEach(function(g, i) {
-      var containerId = gaugeData.containerId + '-gauge-' + i;
-      Highcharts.chart(containerId, {
+      Highcharts.chart(gaugeData.containerId + '-gauge-' + i, {
         chart: {
           type: 'gauge',
           animation: false,
           backgroundColor: 'transparent',
-          spacing: [5, 5, 5, 5],
+          spacing: [0, 0, 0, 0],
           style: { fontFamily: 'inherit' }
         },
-        title: { text: null },
+        title:   { text: null },
         credits: { enabled: false },
         tooltip: { enabled: false },
         pane: {
@@ -230,19 +227,50 @@
           endAngle: 150,
           background: { backgroundColor: 'transparent', borderWidth: 0 }
         },
+        plotOptions: {
+          gauge: {
+            animation: false,
+            pivot: { backgroundColor: 'transparent' },
+            dial:  { backgroundColor: 'transparent', baseWidth: 0 }
+          }
+        },
         yAxis: {
           min: gaugeData.min,
           max: gaugeData.max,
-          tickAmount: 5,
-          labels: { style: { fontSize: '11px', color: '#000' } },
-          title: {
-            text: g.value + gaugeData.unit,
-            style: { fontSize: '14px', color: '#000' }
-          }
+          minorTickInterval: 0,
+          tickColor: '#ffffff',
+          tickLength: 40,
+          tickPixelInterval: 40,
+          tickWidth: 0,
+          lineWidth: 0,
+          labels: {
+            distance: 15,
+            style: { fontSize: '12px', color: '#000' }
+          },
+          plotBands: [
+            {
+              from: gaugeData.min,
+              to: g.value,
+              color: { pattern: { image: 'https://trmnl.com/images/grayscale/gray-2.png', width: 12, height: 12 } },
+              innerRadius: '82%',
+              borderRadius: '50%'
+            },
+            {
+              from: g.value,
+              to: gaugeData.max,
+              color: { pattern: { image: 'https://trmnl.com/images/grayscale/gray-5.png', width: 12, height: 12 } },
+              innerRadius: '82%',
+              borderRadius: '50%'
+            }
+          ]
         },
         series: [{
           data: [g.value],
-          dataLabels: { enabled: false }
+          dataLabels: {
+            borderWidth: 0,
+            format: '{y}' + gaugeData.unit,
+            style: { fontSize: '1.4em', fontWeight: '400', fontFamily: 'inherit', color: '#000' }
+          }
         }]
       });
     });
@@ -255,7 +283,7 @@
     min: {{ chart1.min }},
     max: {{ chart1.max }},
     unit: "{{ chart1.unit }}",
-    gauges: [{% for g in chart1.gauges %}{value: {{ g.value }}}{% unless forloop.last %},{% endunless %}{% endfor %}]
+    gauges: [{% for g in chart1.gauges %}{value:{{ g.value }}}{% unless forloop.last %},{% endunless %}{% endfor %}]
   });
   {% else %}
   buildTimeseriesChart('chart1-main', {
@@ -274,7 +302,7 @@
     min: {{ chart2.min }},
     max: {{ chart2.max }},
     unit: "{{ chart2.unit }}",
-    gauges: [{% for g in chart2.gauges %}{value: {{ g.value }}}{% unless forloop.last %},{% endunless %}{% endfor %}]
+    gauges: [{% for g in chart2.gauges %}{value:{{ g.value }}}{% unless forloop.last %},{% endunless %}{% endfor %}]
   });
   {% else %}
   buildTimeseriesChart('chart2-main', {

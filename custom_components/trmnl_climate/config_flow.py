@@ -21,11 +21,12 @@ from homeassistant.helpers.selector import (
 from .const import (
     CLIMATE_DEVICE_CLASSES,
     CONF_CHART_COUNT,
-    CONF_CHART_HOURS,
     CONF_CHART1_AREAS,
+    CONF_CHART1_HOURS,
     CONF_CHART1_SENSOR_TYPE,
     CONF_CHART1_TYPE,
     CONF_CHART2_AREAS,
+    CONF_CHART2_HOURS,
     CONF_CHART2_SENSOR_TYPE,
     CONF_CHART2_TYPE,
     CONF_PUSH_INTERVAL,
@@ -47,7 +48,7 @@ _CHART_HOURS_OPTIONS = [
 _CHART_TYPE_OPTIONS = [
     {"value": "line",  "label": "Line"},
     {"value": "bar",   "label": "Bar"},
-    {"value": "gauge", "label": "Gauge"},
+    {"value": "gauge", "label": "Gauge (current value, no history needed)"},
 ]
 
 
@@ -176,14 +177,6 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
                     multiple=False,
                     mode=SelectSelectorMode.LIST,
                 )),
-                vol.Optional(
-                    CONF_CHART_HOURS,
-                    default=opts.get(CONF_CHART_HOURS, "24"),
-                ): SelectSelector(SelectSelectorConfig(
-                    options=_CHART_HOURS_OPTIONS,
-                    multiple=False,
-                    mode=SelectSelectorMode.LIST,
-                )),
             }),
         )
 
@@ -226,7 +219,7 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
         )
 
     # ------------------------------------------------------------------
-    # Step 3: chart 1 — area filter
+    # Step 3: chart 1 — area filter (+ history window for line/bar)
     # ------------------------------------------------------------------
 
     async def async_step_chart1_areas(self, user_input=None):
@@ -238,22 +231,34 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
 
         opts = self._options
         sensor_type = opts.get(CONF_CHART1_SENSOR_TYPE, "temperature")
+        chart_type = opts.get(CONF_CHART1_TYPE, "line")
         area_options = _areas_with_sensor_type(self.hass, sensor_type)
         valid_ids = {o["value"] for o in area_options}
         default_areas = [a for a in opts.get(CONF_CHART1_AREAS, []) if a in valid_ids]
 
+        schema: dict = {
+            vol.Optional(
+                CONF_CHART1_AREAS,
+                default=default_areas,
+            ): SelectSelector(SelectSelectorConfig(
+                options=area_options,
+                multiple=True,
+                mode=SelectSelectorMode.LIST,
+            )),
+        }
+        if chart_type in ("line", "bar"):
+            schema[vol.Optional(
+                CONF_CHART1_HOURS,
+                default=opts.get(CONF_CHART1_HOURS, "24"),
+            )] = SelectSelector(SelectSelectorConfig(
+                options=_CHART_HOURS_OPTIONS,
+                multiple=False,
+                mode=SelectSelectorMode.LIST,
+            ))
+
         return self.async_show_form(
             step_id="chart1_areas",
-            data_schema=vol.Schema({
-                vol.Optional(
-                    CONF_CHART1_AREAS,
-                    default=default_areas,
-                ): SelectSelector(SelectSelectorConfig(
-                    options=area_options,
-                    multiple=True,
-                    mode=SelectSelectorMode.LIST,
-                )),
-            }),
+            data_schema=vol.Schema(schema),
         )
 
     # ------------------------------------------------------------------
@@ -295,7 +300,7 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
         )
 
     # ------------------------------------------------------------------
-    # Step 5: chart 2 — area filter
+    # Step 5: chart 2 — area filter (+ history window for line/bar)
     # ------------------------------------------------------------------
 
     async def async_step_chart2_areas(self, user_input=None):
@@ -305,20 +310,32 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
 
         opts = self._options
         sensor_type = opts.get(CONF_CHART2_SENSOR_TYPE, "humidity")
+        chart_type = opts.get(CONF_CHART2_TYPE, "line")
         area_options = _areas_with_sensor_type(self.hass, sensor_type)
         valid_ids = {o["value"] for o in area_options}
         default_areas = [a for a in opts.get(CONF_CHART2_AREAS, []) if a in valid_ids]
 
+        schema: dict = {
+            vol.Optional(
+                CONF_CHART2_AREAS,
+                default=default_areas,
+            ): SelectSelector(SelectSelectorConfig(
+                options=area_options,
+                multiple=True,
+                mode=SelectSelectorMode.LIST,
+            )),
+        }
+        if chart_type in ("line", "bar"):
+            schema[vol.Optional(
+                CONF_CHART2_HOURS,
+                default=opts.get(CONF_CHART2_HOURS, "24"),
+            )] = SelectSelector(SelectSelectorConfig(
+                options=_CHART_HOURS_OPTIONS,
+                multiple=False,
+                mode=SelectSelectorMode.LIST,
+            ))
+
         return self.async_show_form(
             step_id="chart2_areas",
-            data_schema=vol.Schema({
-                vol.Optional(
-                    CONF_CHART2_AREAS,
-                    default=default_areas,
-                ): SelectSelector(SelectSelectorConfig(
-                    options=area_options,
-                    multiple=True,
-                    mode=SelectSelectorMode.LIST,
-                )),
-            }),
+            data_schema=vol.Schema(schema),
         )

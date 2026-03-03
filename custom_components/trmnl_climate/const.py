@@ -29,8 +29,10 @@ CONF_CHART2_SENSOR_TYPE = "chart2_sensor_type"
 CONF_CHART2_AREAS = "chart2_areas"
 CONF_CHART2_TYPE = "chart2_type"
 
-# Shared
-CONF_CHART_HOURS = "chart_hours"
+# Per-chart history window (only used for line/bar)
+CONF_CHART1_HOURS = "chart1_hours"
+CONF_CHART2_HOURS = "chart2_hours"
+
 CONF_PUSH_INTERVAL = "push_interval"
 
 # Gauge y-axis ranges per sensor type

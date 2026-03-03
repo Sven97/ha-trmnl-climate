@@ -18,11 +18,12 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CLIMATE_DEVICE_CLASSES,
     CONF_CHART_COUNT,
-    CONF_CHART_HOURS,
     CONF_CHART1_AREAS,
+    CONF_CHART1_HOURS,
     CONF_CHART1_SENSOR_TYPE,
     CONF_CHART1_TYPE,
     CONF_CHART2_AREAS,
+    CONF_CHART2_HOURS,
     CONF_CHART2_SENSOR_TYPE,
     CONF_CHART2_TYPE,
     CONF_PUSH_INTERVAL,
@@ -267,10 +268,10 @@ def _build_gauge_chart(
 
 async def _build_timeseries_chart(
     hass: HomeAssistant,
-    options: dict,
     sensor_type: str,
     area_filter: list[str],
     chart_type: str,
+    chart_hours: int,
 ) -> dict | None:
     """Build line or bar chart data from recorder history."""
     try:
@@ -286,8 +287,6 @@ async def _build_timeseries_chart(
 
     all_entity_ids = [e["entity_id"] for e in entities]
     unit = entities[0]["unit"] if entities else ""
-
-    chart_hours = int(options.get(CONF_CHART_HOURS, 24))
     num_buckets = 24
     bucket_minutes = chart_hours * 60 // num_buckets
 
@@ -370,4 +369,6 @@ async def _build_single_chart(
 
     if chart_type == "gauge":
         return _build_gauge_chart(hass, sensor_type, area_filter)
-    return await _build_timeseries_chart(hass, options, sensor_type, area_filter, chart_type)
+
+    chart_hours = int(options.get(f"chart{chart_num}_hours", 24))
+    return await _build_timeseries_chart(hass, sensor_type, area_filter, chart_type, chart_hours)
