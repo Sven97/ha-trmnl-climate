@@ -25,7 +25,7 @@
         "data": {
           "chart_count": "Number of charts",
           "chart_hours": "Chart history window",
-          "push_interval": "Update interval (minutes)",
+          "push_interval": "Home Assistant push interval (minutes)",
           "chart1_sensor_type": "Chart 1 — sensor type",
           "chart1_areas": "Chart 1 — areas (empty = all)",
           "chart1_type": "Chart 1 — chart type",
@@ -36,7 +36,7 @@
         "data_description": {
           "chart_count": "How many charts to show below the sensor values.",
           "chart_hours": "How many hours of history to show (line and bar charts only).",
-          "push_interval": "How often data is sent to your TRMNL device.",
+          "push_interval": "Defines how frequently this integration fetches fresh sensor data and pushes it to TRMNL. Independent of the TRMNL device Refresh Rate — both need to be set.",
           "chart1_areas": "Leave empty to include all areas in Chart 1.",
           "chart2_areas": "Leave empty to include all areas in Chart 2."
         }
