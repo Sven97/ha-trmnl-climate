@@ -47,7 +47,7 @@
               {% if kv[0] == sensor.device_class %}{% assign sensor_icon = kv[1] %}{% break %}{% endif %}
             {% endfor %}
             <div class="item">
-              <div class="meta"><span class="mdi {{ sensor_icon }}"></span></div>
+              <div class="meta"><span class="mdi {{ sensor_icon }}" style="font-size: 1.5em;"></span></div>
               <div class="content">
                 <span class="value value--tnums">{{ sensor.state }}{{ sensor.unit }}</span>
               </div>
