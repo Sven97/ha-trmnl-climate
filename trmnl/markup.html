@@ -287,7 +287,6 @@
   });
   {% else %}
   buildTimeseriesChart('chart1-main', {
-    type: "{{ chart1.type }}",
     unit: "{{ chart1.unit }}",
     labels: [{% for l in chart1.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
     series: [{% for s in chart1.series %}{label:"{{ s.label }}",data:[{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}]}{% unless forloop.last %},{% endunless %}{% endfor %}]
@@ -306,7 +305,6 @@
   });
   {% else %}
   buildTimeseriesChart('chart2-main', {
-    type: "{{ chart2.type }}",
     unit: "{{ chart2.unit }}",
     labels: [{% for l in chart2.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
     series: [{% for s in chart2.series %}{label:"{{ s.label }}",data:[{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}]}{% unless forloop.last %},{% endunless %}{% endfor %}]

@@ -270,10 +270,9 @@ async def _build_timeseries_chart(
     hass: HomeAssistant,
     sensor_type: str,
     area_filter: list[str],
-    chart_type: str,
     chart_hours: int,
 ) -> dict | None:
-    """Build line or bar chart data from recorder history."""
+    """Build line chart data from recorder history."""
     try:
         from homeassistant.components.recorder import get_instance
         from homeassistant.components.recorder.history import get_significant_states
@@ -346,7 +345,6 @@ async def _build_timeseries_chart(
         return None
 
     return {
-        "type": chart_type,
         "sensor_type": sensor_type,
         "unit": unit,
         "labels": labels,
@@ -359,16 +357,13 @@ async def _build_single_chart(
     options: dict,
     chart_num: int,
 ) -> dict | None:
-    """Dispatch to gauge or timeseries builder for chart slot 1 or 2."""
-    defaults = {1: ("temperature", "line"), 2: ("humidity", "line")}
-    default_type, default_chart_type = defaults[chart_num]
-
-    sensor_type = options.get(f"chart{chart_num}_sensor_type", default_type)
+    """Dispatch to gauge or line chart builder for chart slot 1 or 2."""
+    sensor_type = options.get(f"chart{chart_num}_sensor_type", "temperature" if chart_num == 1 else "humidity")
     area_filter = options.get(f"chart{chart_num}_areas", [])
-    chart_type = options.get(f"chart{chart_num}_type", default_chart_type)
+    chart_type = options.get(f"chart{chart_num}_type", "line")
 
     if chart_type == "gauge":
         return _build_gauge_chart(hass, sensor_type, area_filter)
 
     chart_hours = int(options.get(f"chart{chart_num}_hours", 24))
-    return await _build_timeseries_chart(hass, sensor_type, area_filter, chart_type, chart_hours)
+    return await _build_timeseries_chart(hass, sensor_type, area_filter, chart_hours)
