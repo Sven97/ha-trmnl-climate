@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CHART_SENSOR_ORDER,
+    CHART_TYPE_SHORT,
     CHART_YAXIS_RIGHT,
     CLIMATE_DEVICE_CLASSES,
     CONF_AREA_FILTER,
@@ -221,14 +222,13 @@ def _find_chart_entities_by_class(hass: HomeAssistant, options: dict) -> dict[st
 
 async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
     """
-    Build a columnrange chart: one series per sensor type, showing min/max
-    across all charted areas per time bucket.
+    Build a spline chart: one series per area per sensor type.
 
-    Bucket size scales with the time window so there are always 24 bars:
+    Bucket size scales with the time window so there are always 24 points:
       24 h → 60-min buckets, 12 h → 30-min buckets, 6 h → 15-min buckets.
 
     Returns {"chart": {labels, left_unit, right_unit, has_right, series}}
-    where each series has {label, y_axis, data: [{low, high} | null]}.
+    where each series has {label, y_axis, data: [avg | null]}.
     """
     if not options.get(CONF_SHOW_CHART, False):
         return {}
@@ -281,13 +281,13 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         _LOGGER.warning("Failed to fetch chart history: %s", err)
         return {}
 
-    # Aggregate all values per sensor class (across all areas) into per-bucket lists
-    class_buckets: dict[str, dict[int, list[float]]] = {}
+    # Bucket each entity into per-bucket averages
+    entity_buckets: dict[str, dict[int, list[float]]] = {}
     all_bucket_keys: set[int] = set()
 
     for device_class, entities in entities_by_class.items():
-        dc_buckets: dict[int, list[float]] = defaultdict(list)
         for ent in entities:
+            buckets: dict[int, list[float]] = defaultdict(list)
             for s in states_map.get(ent["entity_id"], []):
                 try:
                     v = float(s.state)
@@ -296,9 +296,9 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
                 elapsed = (s.last_changed.astimezone(tz) - start_local).total_seconds()
                 key = int(elapsed / (bucket_minutes * 60))
                 if 0 <= key < num_buckets:
-                    dc_buckets[key].append(v)
+                    buckets[key].append(v)
                     all_bucket_keys.add(key)
-        class_buckets[device_class] = dict(dc_buckets)
+            entity_buckets[ent["entity_id"]] = dict(buckets)
 
     if not all_bucket_keys:
         return {}
@@ -310,6 +310,7 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
     ]
 
     charted_classes = [dc for dc in CHART_SENSOR_ORDER if dc in entities_by_class]
+    multi_type = len(charted_classes) > 1
 
     left_unit = ""
     right_unit = ""
@@ -327,20 +328,19 @@ async def _build_chart_data(hass: HomeAssistant, options: dict) -> dict:
         if y_axis == 1:
             has_right = True
 
-        buckets = class_buckets.get(device_class, {})
-        data = []
-        for k in sorted_keys:
-            if k in buckets and buckets[k]:
-                vals = buckets[k]
-                data.append({"low": round(min(vals), 1), "high": round(max(vals), 1)})
-            else:
-                data.append(None)
+        short = CHART_TYPE_SHORT.get(device_class, device_class)
 
-        if not any(v is not None for v in data):
-            continue
+        for e in entities_by_class[device_class]:
+            buckets = entity_buckets[e["entity_id"]]
+            data = [
+                round(sum(buckets[k]) / len(buckets[k]), 1) if k in buckets else None
+                for k in sorted_keys
+            ]
+            if not any(v is not None for v in data):
+                continue
 
-        label = device_class.replace("_", " ").title()
-        series.append({"label": label, "y_axis": y_axis, "data": data})
+            label = f"{e['area_name']} {short}" if multi_type else e["area_name"]
+            series.append({"label": label, "y_axis": y_axis, "data": data})
 
     if not series:
         return {}
