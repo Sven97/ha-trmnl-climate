@@ -155,7 +155,7 @@
   function buildTimeseriesChart(containerId, chartData) {
     Highcharts.chart(containerId, {
       chart: {
-        type: chartData.type === 'bar' ? 'column' : 'spline',
+        type: 'spline',
         animation: false,
         backgroundColor: 'transparent',
         spacing: [10, 10, 5, 10],

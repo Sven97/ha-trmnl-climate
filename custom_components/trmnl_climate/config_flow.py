@@ -47,7 +47,6 @@ _CHART_HOURS_OPTIONS = [
 ]
 _CHART_TYPE_OPTIONS = [
     {"value": "line",  "label": "Line"},
-    {"value": "bar",   "label": "Bar"},
     {"value": "gauge", "label": "Gauge (current value, no history needed)"},
 ]
 
