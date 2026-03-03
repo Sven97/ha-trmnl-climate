@@ -18,52 +18,57 @@
     }
   },
   "options": {
+    "error": {
+      "too_many_areas": "Please select at most 4 areas."
+    },
     "step": {
       "init": {
-        "title": "Display & Push Settings",
+        "title": "Push Interval",
         "data": {
-          "push_interval": "Home Assistant push interval (minutes)",
-          "chart_count": "Number of charts"
+          "push_interval": "Push interval (minutes)"
         },
         "data_description": {
-          "push_interval": "Defines how frequently this integration fetches fresh sensor data and pushes it to TRMNL. Independent of the TRMNL device Refresh Rate — both need to be set.",
-          "chart_count": "How many charts to show below the sensor values."
+          "push_interval": "How often this integration fetches sensor data and pushes it to TRMNL. Set this independently from the TRMNL device Refresh Rate — both must be configured."
         }
       },
-      "chart1": {
-        "title": "Chart 1",
+      "areas": {
+        "title": "Areas",
         "data": {
-          "chart1_sensor_type": "Sensor type",
-          "chart1_type": "Chart style"
-        }
-      },
-      "chart1_areas": {
-        "title": "Chart 1 — Areas",
-        "data": {
-          "chart1_areas": "Areas to include",
-          "chart1_hours": "History window"
+          "areas": "Areas to display"
         },
         "data_description": {
-          "chart1_areas": "Leave empty to include all areas.",
-          "chart1_hours": "How many hours of history to show."
+          "areas": "Select up to 4 areas. Leave empty to include all areas (up to 4, alphabetically)."
         }
       },
-      "chart2": {
-        "title": "Chart 2",
+      "display": {
+        "title": "Display Mode",
         "data": {
-          "chart2_sensor_type": "Sensor type",
-          "chart2_type": "Chart style"
-        }
-      },
-      "chart2_areas": {
-        "title": "Chart 2 — Areas",
-        "data": {
-          "chart2_areas": "Areas to include",
-          "chart2_hours": "History window"
+          "display_mode": "What should this plugin display?"
         },
         "data_description": {
-          "chart2_areas": "Leave empty to include all areas.",
-          "chart2_hours": "How many hours of history to show."
+          "display_mode": "Each plugin instance shows either values or a chart. Use TRMNL mashup to combine multiple instances on one screen."
+        }
+      },
+      "sensor_types": {
+        "title": "Sensor Types",
+        "data": {
+          "sensor_types": "Sensor types to display",
+          "chart_sensor_type": "Sensor type to chart"
+        },
+        "data_description": {
+          "sensor_types": "Which sensor types to show per area. Leave empty to show all available types.",
+          "chart_sensor_type": "Each area will appear as a separate line (or gauge dial) for this sensor type."
+        }
+      },
+      "chart_type": {
+        "title": "Chart Settings",
+        "data": {
+          "chart_type": "Chart type",
+          "chart_hours": "History window"
+        },
+        "data_description": {
+          "chart_type": "Line charts show sensor history. Gauges show the current value only (no history needed).",
+          "chart_hours": "How many hours of history to show. Only applies to line charts."
         }
       }
     }

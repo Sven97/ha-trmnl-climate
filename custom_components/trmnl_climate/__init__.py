@@ -17,16 +17,13 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CLIMATE_DEVICE_CLASSES,
-    CONF_CHART_COUNT,
-    CONF_CHART1_AREAS,
-    CONF_CHART1_HOURS,
-    CONF_CHART1_SENSOR_TYPE,
-    CONF_CHART1_TYPE,
-    CONF_CHART2_AREAS,
-    CONF_CHART2_HOURS,
-    CONF_CHART2_SENSOR_TYPE,
-    CONF_CHART2_TYPE,
+    CONF_AREAS,
+    CONF_CHART_HOURS,
+    CONF_CHART_SENSOR_TYPE,
+    CONF_CHART_TYPE,
+    CONF_DISPLAY_MODE,
     CONF_PUSH_INTERVAL,
+    CONF_SENSOR_TYPES,
     CONF_WEBHOOK_URL,
     DOMAIN,
     GAUGE_RANGES,
@@ -55,7 +52,9 @@ class TrmnlPushCoordinator(DataUpdateCoordinator[None]):
         webhook_url = self._entry.data[CONF_WEBHOOK_URL]
         options = self._entry.options
 
-        areas_data = _build_areas_data(self.hass)
+        area_filter = list(options.get(CONF_AREAS, []))
+        sensor_type_filter = list(options.get(CONF_SENSOR_TYPES, []))
+        areas_data = _build_areas_data(self.hass, area_filter, sensor_type_filter)
         if not areas_data:
             _LOGGER.debug("No climate sensors found in any area — skipping push")
             return
@@ -65,15 +64,21 @@ class TrmnlPushCoordinator(DataUpdateCoordinator[None]):
             "last_updated": dt_util.now().strftime("%H:%M"),
         }
 
-        chart_count = int(options.get(CONF_CHART_COUNT, 0))
-        if chart_count >= 1:
-            data = await _build_single_chart(self.hass, options, 1)
-            if data:
-                merge_vars["chart1"] = data
-        if chart_count >= 2:
-            data = await _build_single_chart(self.hass, options, 2)
-            if data:
-                merge_vars["chart2"] = data
+        if options.get(CONF_DISPLAY_MODE) == "chart":
+            chart_type = options.get(CONF_CHART_TYPE, "line")
+            chart_hours = int(options.get(CONF_CHART_HOURS, 24))
+
+            sensor_type = options.get(CONF_CHART_SENSOR_TYPE)
+            if not sensor_type:
+                available = _available_sensor_types_in_areas(self.hass, area_filter)
+                sensor_type = available[0] if available else None
+
+            if sensor_type:
+                data = await _build_chart(
+                    self.hass, chart_type, sensor_type, area_filter, chart_hours
+                )
+                if data:
+                    merge_vars["chart"] = data
 
         session = async_get_clientsession(self.hass)
         try:
@@ -100,7 +105,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Initial push on startup
     await coordinator.async_refresh()
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
@@ -108,7 +112,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload when options change (picks up new push_interval etc.)."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
@@ -123,8 +126,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 # Current sensor data
 # ---------------------------------------------------------------------------
 
-def _build_areas_data(hass: HomeAssistant) -> list[dict]:
-    """Return climate sensors grouped by area, sorted by area name."""
+def _build_areas_data(
+    hass: HomeAssistant,
+    area_filter: list[str],
+    sensor_type_filter: list[str],
+) -> list[dict]:
+    """Return climate sensors grouped by area, sorted by area name. Capped at 4."""
     area_reg = ar.async_get(hass)
     entity_reg = er.async_get(hass)
     device_reg = dr.async_get(hass)
@@ -144,6 +151,8 @@ def _build_areas_data(hass: HomeAssistant) -> list[dict]:
         device_class = state.attributes.get("device_class")
         if device_class not in CLIMATE_DEVICE_CLASSES:
             continue
+        if sensor_type_filter and device_class not in sensor_type_filter:
+            continue
 
         area_id = entity.area_id
         if area_id is None and entity.device_id:
@@ -152,6 +161,9 @@ def _build_areas_data(hass: HomeAssistant) -> list[dict]:
                 area_id = device.area_id
 
         if area_id is None:
+            continue
+
+        if area_filter and area_id not in area_filter:
             continue
 
         area = area_reg.async_get_area(area_id)
@@ -171,12 +183,48 @@ def _build_areas_data(hass: HomeAssistant) -> list[dict]:
     for area in areas.values():
         area["sensors"].sort(key=lambda s: order.get(s["device_class"], 99))
 
-    return sorted(areas.values(), key=lambda a: a["area"])
+    return sorted(areas.values(), key=lambda a: a["area"])[:4]
 
 
 # ---------------------------------------------------------------------------
-# Chart / history data
+# Chart data
 # ---------------------------------------------------------------------------
+
+def _available_sensor_types_in_areas(
+    hass: HomeAssistant,
+    area_filter: list[str],
+) -> list[str]:
+    """Return sensor types (in SENSOR_DISPLAY_ORDER) present in the filtered areas."""
+    entity_reg = er.async_get(hass)
+    device_reg = dr.async_get(hass)
+
+    found: set[str] = set()
+
+    for entity in entity_reg.entities.values():
+        if not entity.entity_id.startswith("sensor.") or entity.disabled_by is not None:
+            continue
+        state = hass.states.get(entity.entity_id)
+        if state is None or state.state in ("unknown", "unavailable"):
+            continue
+        dc = state.attributes.get("device_class")
+        if dc not in CLIMATE_DEVICE_CLASSES:
+            continue
+
+        area_id = entity.area_id
+        if area_id is None and entity.device_id:
+            device = device_reg.async_get(entity.device_id)
+            if device:
+                area_id = device.area_id
+        if area_id is None:
+            continue
+
+        if area_filter and area_id not in area_filter:
+            continue
+
+        found.add(dc)
+
+    return [dc for dc in SENSOR_DISPLAY_ORDER if dc in found]
+
 
 def _find_chart_entities_by_class(
     hass: HomeAssistant,
@@ -201,8 +249,7 @@ def _find_chart_entities_by_class(
         if state is None or state.state in ("unknown", "unavailable"):
             continue
 
-        device_class = state.attributes.get("device_class")
-        if device_class != sensor_type:
+        if state.attributes.get("device_class") != sensor_type:
             continue
 
         area_id = entity.area_id
@@ -232,7 +279,19 @@ def _find_chart_entities_by_class(
         })
 
     result.sort(key=lambda x: x["area_name"])
-    return result
+    return result[:4]
+
+
+async def _build_chart(
+    hass: HomeAssistant,
+    chart_type: str,
+    sensor_type: str,
+    area_filter: list[str],
+    chart_hours: int,
+) -> dict | None:
+    if chart_type == "gauge":
+        return _build_gauge_chart(hass, sensor_type, area_filter)
+    return await _build_timeseries_chart(hass, sensor_type, area_filter, chart_hours)
 
 
 def _build_gauge_chart(
@@ -240,7 +299,7 @@ def _build_gauge_chart(
     sensor_type: str,
     area_filter: list[str],
 ) -> dict | None:
-    """Build gauge chart data using current sensor states."""
+    """Build gauge chart data from current sensor states."""
     entities = _find_chart_entities_by_class(hass, sensor_type, area_filter)
     if not entities:
         return None
@@ -266,6 +325,7 @@ def _build_gauge_chart(
     return {
         "type": "gauge",
         "sensor_type": sensor_type,
+        "title": sensor_type.replace("_", " ").title(),
         "unit": unit,
         "min": g_min,
         "max": g_max,
@@ -352,25 +412,10 @@ async def _build_timeseries_chart(
         return None
 
     return {
+        "type": "line",
         "sensor_type": sensor_type,
+        "title": sensor_type.replace("_", " ").title(),
         "unit": unit,
         "labels": labels,
         "series": series,
     }
-
-
-async def _build_single_chart(
-    hass: HomeAssistant,
-    options: dict,
-    chart_num: int,
-) -> dict | None:
-    """Dispatch to gauge or line chart builder for chart slot 1 or 2."""
-    sensor_type = options.get(f"chart{chart_num}_sensor_type", "temperature" if chart_num == 1 else "humidity")
-    area_filter = options.get(f"chart{chart_num}_areas", [])
-    chart_type = options.get(f"chart{chart_num}_type", "line")
-
-    if chart_type == "gauge":
-        return _build_gauge_chart(hass, sensor_type, area_filter)
-
-    chart_hours = int(options.get(f"chart{chart_num}_hours", 24))
-    return await _build_timeseries_chart(hass, sensor_type, area_filter, chart_hours)

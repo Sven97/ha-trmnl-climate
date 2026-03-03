@@ -1,6 +1,13 @@
 DOMAIN = "trmnl_climate"
 
 CONF_WEBHOOK_URL = "webhook_url"
+CONF_PUSH_INTERVAL = "push_interval"
+CONF_AREAS = "areas"
+CONF_DISPLAY_MODE = "display_mode"         # "values" | "chart"
+CONF_SENSOR_TYPES = "sensor_types"         # values mode: list of sensor type strings
+CONF_CHART_SENSOR_TYPE = "chart_sensor_type"  # chart mode: single sensor type string
+CONF_CHART_TYPE = "chart_type"             # "line" | "gauge"
+CONF_CHART_HOURS = "chart_hours"
 
 SENSOR_DISPLAY_ORDER = [
     "temperature",
@@ -16,26 +23,6 @@ SENSOR_DISPLAY_ORDER = [
 
 CLIMATE_DEVICE_CLASSES = frozenset(SENSOR_DISPLAY_ORDER)
 
-# Chart count
-CONF_CHART_COUNT = "chart_count"
-
-# Chart 1
-CONF_CHART1_SENSOR_TYPE = "chart1_sensor_type"
-CONF_CHART1_AREAS = "chart1_areas"
-CONF_CHART1_TYPE = "chart1_type"
-
-# Chart 2
-CONF_CHART2_SENSOR_TYPE = "chart2_sensor_type"
-CONF_CHART2_AREAS = "chart2_areas"
-CONF_CHART2_TYPE = "chart2_type"
-
-# Per-chart history window (only used for line/bar)
-CONF_CHART1_HOURS = "chart1_hours"
-CONF_CHART2_HOURS = "chart2_hours"
-
-CONF_PUSH_INTERVAL = "push_interval"
-
-# Gauge y-axis ranges per sensor type
 GAUGE_RANGES = {
     "temperature":                (0, 40),
     "humidity":                   (0, 100),

@@ -1,0 +1,205 @@
+<style>
+  @import url('https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css');
+  .item .meta { background: none !important; box-shadow: none !important; }
+  .title_bar  { background: none !important; border-top: none !important; }
+
+  /* Narrow slots: wrap into 2 columns, center rows as a group */
+  .view--half_vertical .areas-wrap,
+  .view--quadrant .areas-wrap {
+    flex-wrap: wrap;
+    align-content: center;
+  }
+  .view--half_vertical .area-col,
+  .view--quadrant .area-col {
+    flex: none !important;
+    width: 50%;
+    box-sizing: border-box;
+  }
+
+  /* Half vertical: breathing room between the 2 area rows */
+  .view--half_vertical .areas-wrap {
+    row-gap: 20px;
+  }
+
+  /* Quadrant: scale down content to fit 4 areas in 240px height.
+     Use high-specificity selectors to beat TRMNL's framework CSS
+     even if it uses !important on .value. */
+  html body .view--quadrant .value,
+  html body .view--quadrant .value--tnums {
+    font-size: 1.5rem !important;
+    line-height: 1.15 !important;
+  }
+  html body .view--quadrant .label {
+    font-size: 0.85rem !important;
+  }
+  html body .view--quadrant .item {
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+</style>
+
+{% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
+
+{% assign has_chart = false %}
+{% if chart %}{% assign has_chart = true %}{% endif %}
+
+{% if areas == empty %}
+
+<div class="layout layout--center">
+  <div class="item">
+    <div class="content">
+      <span class="title">No climate sensors found</span>
+      <span class="description">Assign sensors to areas in Home Assistant.</span>
+    </div>
+  </div>
+</div>
+
+{% elsif has_chart == false %}
+
+{% comment %} Values mode: single row on wide slots, 2×2 grid on narrow slots, vertically centered {% endcomment %}
+<div class="areas-wrap" style="display: flex; align-items: center; height: calc(100% - 36px); padding: 0 8px;">
+  {% for area in areas %}
+  <div class="area-col" style="flex: 1; min-width: 0;">
+    <div class="item">
+      <div class="content"><span class="label">{{ area.area }}</span></div>
+    </div>
+    {% for sensor in area.sensors %}
+    {% assign sensor_icon = 'mdi-gauge' %}
+    {% for pair in icon_map %}
+      {% assign kv = pair | split: ':' %}
+      {% if kv[0] == sensor.device_class %}{% assign sensor_icon = kv[1] %}{% break %}{% endif %}
+    {% endfor %}
+    <div class="item">
+      <div class="meta"><span class="mdi {{ sensor_icon }}" style="font-size: 1.5em;"></span></div>
+      <div class="content"><span class="value value--tnums">{{ sensor.state }}{{ sensor.unit }}</span></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+{% elsif chart.type == 'gauge' %}
+
+{% comment %} Gauge mode: row of dials {% endcomment %}
+<div style="display: flex; flex-direction: column; height: calc(100% - 36px); padding: 8px;">
+  <span class="label" style="text-align: center; margin-bottom: 4px;">{{ chart.title }}</span>
+  <div style="display: flex; flex: 1; min-height: 0;">
+    {% for g in chart.gauges %}
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0;">
+      <div id="gauge-{{ forloop.index0 }}" style="flex: 1; width: 100%; min-height: 0;"></div>
+      <span class="description" style="text-align: center;">{{ g.area }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% else %}
+
+{% comment %} Line chart mode {% endcomment %}
+<div id="chart-main" style="height: calc(100% - 36px); padding: 8px 8px 0;"></div>
+
+{% endif %}
+
+<div class="title_bar">
+  <span class="instance">Updated {{ last_updated }}</span>
+</div>
+
+{% if has_chart %}
+<script src="https://trmnl.com/js/highcharts/12.3.0/highcharts.js"></script>
+<script src="https://trmnl.com/js/highcharts/12.3.0/highcharts-more.js"></script>
+<script src="https://trmnl.com/js/highcharts/12.3.0/pattern-fill.js"></script>
+<script>
+(function () {
+  var COLORS = [
+    '#000000',
+    { pattern: { image: 'https://trmnl.com/images/grayscale/gray-3.png', width: 12, height: 12 } },
+    { pattern: { image: 'https://trmnl.com/images/grayscale/gray-5.png', width: 12, height: 12 } },
+    { pattern: { image: 'https://trmnl.com/images/grayscale/gray-7.png', width: 12, height: 12 } }
+  ];
+  var WIDTHS = [4, 5, 5, 5];
+  var FONT_MONO = '"Space Mono", ui-monospace, monospace';
+  var FONT_SANS = '"Inter var", ui-sans-serif, sans-serif';
+  var axisLabel = { style: { fontSize: '13px', color: '#000000', fontFamily: FONT_MONO } };
+
+  {% if chart.type == 'gauge' %}
+  var gauges = [{% for g in chart.gauges %}{area:"{{ g.area }}",value:{{ g.value }}}{% unless forloop.last %},{% endunless %}{% endfor %}];
+  gauges.forEach(function(g, i) {
+    Highcharts.chart('gauge-' + i, {
+      chart: { type: 'gauge', animation: false, backgroundColor: 'transparent',
+               spacing: [0, 0, 0, 0], style: { fontFamily: FONT_MONO } },
+      title: { text: null }, credits: { enabled: false }, tooltip: { enabled: false },
+      pane: { startAngle: -150, endAngle: 150,
+              background: { backgroundColor: 'transparent', borderWidth: 0 } },
+      plotOptions: { gauge: { animation: false,
+        pivot: { backgroundColor: 'transparent' }, dial: { backgroundColor: 'transparent', baseWidth: 0 } } },
+      yAxis: {
+        min: {{ chart.min }}, max: {{ chart.max }}, minorTickInterval: 0,
+        tickWidth: 0, lineWidth: 0, tickPixelInterval: 40,
+        labels: { distance: 15, style: { fontSize: '11px', color: '#000' } },
+        plotBands: [
+          { from: {{ chart.min }}, to: g.value,
+            color: { pattern: { image: 'https://trmnl.com/images/grayscale/gray-2.png', width: 12, height: 12 } },
+            innerRadius: '82%', borderRadius: '50%' },
+          { from: g.value, to: {{ chart.max }},
+            color: { pattern: { image: 'https://trmnl.com/images/grayscale/gray-5.png', width: 12, height: 12 } },
+            innerRadius: '82%', borderRadius: '50%' }
+        ]
+      },
+      series: [{ data: [g.value], dataLabels: { borderWidth: 0,
+        format: '{y}' + "{{ chart.unit }}",
+        style: { fontSize: '1.2em', fontWeight: '400', fontFamily: FONT_MONO, color: '#000' } } }]
+    });
+  });
+  {% else %}
+  var series = [{% for s in chart.series %}{label:"{{ s.label }}",data:[{% for v in s.data %}{% if v == nil %}null{% else %}{{ v }}{% endif %}{% unless forloop.last %},{% endunless %}{% endfor %}]}{% unless forloop.last %},{% endunless %}{% endfor %}];
+  Highcharts.chart('chart-main', {
+    chart: { type: 'spline', animation: false, backgroundColor: 'transparent',
+             spacing: [8, 8, 4, 8], marginRight: 65, style: { fontFamily: FONT_MONO } },
+    title:   { text: "{{ chart.title }}", style: { fontSize: '12px', fontFamily: FONT_SANS, fontWeight: 'normal' }, margin: 4 },
+    credits: { enabled: false }, tooltip: { enabled: false }, legend: { enabled: false },
+    xAxis: { categories: [{% for l in chart.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
+             tickInterval: 2, lineWidth: 0, tickWidth: 0, gridLineWidth: 0,
+             labels: Object.assign({ y: 20 }, axisLabel) },
+    yAxis: { title: { text: null },
+             labels: Object.assign({ format: '{value}' + "{{ chart.unit }}" }, axisLabel),
+             gridLineDashStyle: 'shortdot', gridLineWidth: 1, gridLineColor: '#000000', tickAmount: 4 },
+    plotOptions: { series: { animation: false, enableMouseTracking: false,
+                             states: { hover: { enabled: false } }, marker: { enabled: false } } },
+    series: series.map(function(s, i) {
+      var lastIdx = s.data.reduce(function(acc, v, idx) { return v !== null ? idx : acc; }, -1);
+      return {
+        name: s.label, color: COLORS[i % 4], lineWidth: WIDTHS[i % 4], connectNulls: false,
+        data: s.data.map(function(v, idx) {
+          if (idx !== lastIdx) return v;
+          return { y: v, dataLabels: { enabled: true, formatter: function() { return s.label; },
+            align: 'left', x: 6, y: 0, crop: false, overflow: 'allow',
+            style: { fontSize: '10px', fontWeight: 'normal', color: '#000', textOutline: 'none', fontFamily: FONT_SANS } } };
+        })
+      };
+    })
+  });
+  {% endif %}
+
+}());
+</script>
+{% endif %}
+
+<script>
+/* Quadrant: JS fallback to scale values — inline setProperty beats all stylesheet rules */
+(function () {
+  if (!document.querySelector('.view--quadrant')) return;
+  document.querySelectorAll('.value, .value--tnums').forEach(function (el) {
+    el.style.setProperty('font-size', '1.5rem', 'important');
+    el.style.setProperty('line-height', '1.15', 'important');
+  });
+  document.querySelectorAll('.item').forEach(function (el) {
+    el.style.setProperty('min-height', '0', 'important');
+    el.style.setProperty('padding-top', '0', 'important');
+    el.style.setProperty('padding-bottom', '0', 'important');
+  });
+  document.querySelectorAll('.label').forEach(function (el) {
+    el.style.setProperty('font-size', '0.85rem', 'important');
+  });
+}());
+</script>
