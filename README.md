@@ -1,27 +1,35 @@
 # TRMNL HA Climate Connector
 
-A Home Assistant custom integration that pushes climate sensor data (temperature,
-humidity, CO₂, etc.) to a [TRMNL](https://usetrmnl.com) device, grouped by area.
-Only areas that contain at least one climate sensor are included.
+A Home Assistant custom integration that pushes climate sensor data to your
+[TRMNL](https://usetrmnl.com) e-ink display — grouped by area, with live
+values or historical charts.
 
-**Supported device classes:** temperature · humidity · carbon_dioxide · pressure ·
-pm25 · pm10 · volatile_organic_compounds · nitrogen_dioxide · carbon_monoxide
+**Supported sensor types:** temperature · humidity · CO₂ · pressure · PM2.5 · PM10 · VOC · NO₂ · CO
+
+---
+
+## Features
+
+- **Values mode** — shows current readings per area with sensor icons; choose which sensor types to display
+- **Chart mode** — line chart (history over time) or gauge dials (current value), one sensor type per chart instance
+- **Up to 4 areas** displayed simultaneously
+- **TRMNL mashup ready** — combine multiple plugin instances (e.g. values + chart) using TRMNL's built-in Mashup UI
+- Single shared template that adapts to all TRMNL slot sizes: Full, Half horizontal, Half vertical, Quadrant
+- Scheduled push (configurable interval) + on-demand push button in HA
+- No external server — HA pushes outbound to TRMNL's webhook; your credentials never leave your home network
 
 ---
 
 ## How it works
 
 ```
-HA integration (every 15 min)
-  → reads area registry + entity states
+Home Assistant (every N minutes)
+  → reads area registry + entity states (+ recorder history for charts)
   → POST https://trmnl.com/api/custom_plugins/{UUID}
-       { merge_variables: { areas: [...] } }
+       { merge_variables: { areas: [...], chart: {...} } }
 
-TRMNL receives push → renders markup → shows on device
+TRMNL receives push → renders shared.html → displays on device
 ```
-
-No external server. HA pushes data outbound to TRMNL's webhook endpoint.
-Your HA credentials never leave your home network.
 
 ---
 
@@ -37,8 +45,8 @@ Your HA credentials never leave your home network.
 
 ### Manual
 
-Copy the `custom_components/trmnl_climate/` folder into your HA
-`config/custom_components/` directory and restart.
+Copy `custom_components/trmnl_climate/` into your HA `config/custom_components/`
+directory and restart.
 
 ---
 
@@ -46,43 +54,65 @@ Copy the `custom_components/trmnl_climate/` folder into your HA
 
 ### 1. Create the TRMNL plugin
 
-1. In TRMNL dashboard: **Plugins → Custom → New Plugin**
-2. Strategy: **Webhook**
-3. No form fields needed
-4. Paste `trmnl/markup.html` into the **Markup Editor**
-5. Save — copy the **Webhook URL** shown on the settings page
-   (looks like `https://trmnl.com/api/custom_plugins/xxxxxxxxxxxxxxxx`)
+1. In your TRMNL dashboard: **Plugins → Custom → New Plugin**
+2. Strategy: **Webhook** — no form fields needed
+3. Open the **Markup Editor**, select the **Shared** tab, and paste the contents of [`trmnl/shared.html`](trmnl/shared.html)
+4. Save and copy the **Webhook URL** (e.g. `https://trmnl.com/api/custom_plugins/xxxxxxxxxxxxxxxx`)
 
+> **Tip:** To show both values and a chart on one screen, create two separate plugin instances with the same webhook URL and arrange them with TRMNL's Mashup UI.
 
-### 2. Add the integration
+### 2. Add the integration in Home Assistant
 
 1. **Settings → Devices & Services → Add Integration**
 2. Search for **TRMNL HA Climate Connector**
-3. Paste the webhook URL and submit
+3. Paste the webhook URL → **Submit**
 
-The integration immediately pushes the current data, then refreshes every 15 minutes.
+The integration pushes current data immediately, then on the configured schedule.
+
+---
+
+## Configuration
+
+Open **Configure** on the integration to adjust settings. The flow walks through each option in order:
+
+| Step | Setting | Description |
+|------|---------|-------------|
+| 1 | **Push interval** | How often HA pushes data to TRMNL (5–60 min). Configure independently from the TRMNL device Refresh Rate — both must be set. |
+| 2 | **Areas** | Up to 4 areas to display. Leave empty to auto-include all areas with climate sensors (up to 4, alphabetically). |
+| 3 | **Display mode** | **Values** — current sensor readings per area. **Chart** — line chart or gauge. |
+| 4a | **Sensor types** *(values mode)* | Which sensor types to show per area. Leave empty to show all available types. |
+| 4b | **Sensor type** *(chart mode)* | One type for the chart — each configured area becomes a separate line or gauge dial. |
+| 5 | **Chart type + history window** *(chart mode only)* | Line chart with 6/12/24 h of history, or Gauge showing the current value. |
+
+> Sensors must be assigned to areas in **Settings → Areas & Zones**, and each entity must have a `device_class` set.
+
+---
+
+## Mashup examples
+
+TRMNL's [Mashup](https://docs.usetrmnl.com/go/framework/mashup) UI lets you combine multiple plugin instances on one screen. Each instance uses the same webhook URL but can be configured independently.
+
+| Layout | Slot A | Slot B |
+|--------|--------|--------|
+| 1 Top, 1 Bottom | Values — all areas | Temperature line chart |
+| 1 Left, 1 Right | Values — indoor areas | Values — outdoor areas |
+| 1 Left, 2 Right | Values — all areas | CO₂ gauge · Humidity gauge |
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Cause |
-|---------|-------|
-| Display empty / "No climate sensors" | Sensors not assigned to areas — go to Settings → Areas & Zones |
-| "Cannot connect" during setup | Wrong webhook URL, or TRMNL unreachable |
-| Warnings in HA logs | TRMNL returned a non-2xx status — check the webhook URL |
-| Sensor missing from an area | `device_class` not set — edit the entity in HA Settings → Devices |
-| Data cuts off | Payload over 2 kb (free) / 5 kb (TRMNL+) — reduce sensor count or areas |
+| Symptom | Likely cause |
+|---------|--------------|
+| "No climate sensors found" on display | Sensors not assigned to areas — go to Settings → Areas & Zones |
+| "Cannot connect" during setup | Wrong webhook URL, or TRMNL temporarily unreachable |
+| Sensor missing from display | `device_class` not set — edit the entity in Settings → Devices |
+| Chart shows no data | Recorder integration not running, or history window too short |
+| Data appears stale | Both push interval (HA) and Refresh Rate (TRMNL) must be configured |
+| Payload size warning | Free tier: 2 kb limit; TRMNL+: 5 kb. Reduce areas or limit sensor types in configuration. |
 
-### Payload size estimate
+---
 
-Each sensor entry is ~60 bytes:
+## License
 
-| Setup | Size |
-|-------|------|
-| 4 areas × 3 sensors | ~800 b |
-| 8 areas × 3 sensors | ~1.5 kb |
-| 10 areas × 5 sensors | ~3 kb (needs TRMNL+) |
-
-To reduce payload, edit `CLIMATE_DEVICE_CLASSES` in `const.py` and remove
-device classes you don't need.
+MIT
