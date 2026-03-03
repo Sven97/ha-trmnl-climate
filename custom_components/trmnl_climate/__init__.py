@@ -5,14 +5,14 @@ from collections import defaultdict
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import (
     area_registry as ar,
     device_registry as dr,
     entity_registry as er,
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -35,20 +35,21 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["button"]
 
 
-class TrmnlPushCoordinator(DataUpdateCoordinator[None]):
+class TrmnlPushCoordinator:
     """Pushes climate data to TRMNL on a schedule; also supports on-demand refresh."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        push_interval = int(entry.options.get(CONF_PUSH_INTERVAL, 15))
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=DOMAIN,
-            update_interval=timedelta(minutes=push_interval),
-        )
+        self.hass = hass
         self._entry = entry
 
-    async def _async_update_data(self) -> None:
+    async def async_refresh(self) -> None:
+        """Push climate data to TRMNL immediately (called by button and timer)."""
+        try:
+            await self._async_push()
+        except Exception as err:
+            _LOGGER.error("Error pushing climate data to TRMNL: %s", err)
+
+    async def _async_push(self) -> None:
         webhook_url = self._entry.data[CONF_WEBHOOK_URL]
         options = self._entry.options
 
@@ -81,20 +82,15 @@ class TrmnlPushCoordinator(DataUpdateCoordinator[None]):
                     merge_vars["chart"] = data
 
         session = async_get_clientsession(self.hass)
-        try:
-            async with session.post(
-                webhook_url,
-                json={"merge_variables": merge_vars},
-                timeout=10,
-            ) as resp:
-                if resp.status not in (200, 201, 202):
-                    raise UpdateFailed(
-                        f"TRMNL push failed: HTTP {resp.status} — {await resp.text()}"
-                    )
-        except UpdateFailed:
-            raise
-        except Exception as err:
-            raise UpdateFailed(f"Error pushing climate data to TRMNL: {err}") from err
+        async with session.post(
+            webhook_url,
+            json={"merge_variables": merge_vars},
+            timeout=10,
+        ) as resp:
+            if resp.status not in (200, 201, 202):
+                raise RuntimeError(
+                    f"TRMNL push failed: HTTP {resp.status} — {await resp.text()}"
+                )
 
         _LOGGER.debug("TRMNL push successful (%s areas)", len(areas_data))
 
@@ -104,6 +100,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    push_interval = int(entry.options.get(CONF_PUSH_INTERVAL, 15))
+
+    @callback
+    def _handle_interval(_now) -> None:
+        hass.async_create_task(coordinator.async_refresh())
+
+    entry.async_on_unload(
+        async_track_time_interval(hass, _handle_interval, timedelta(minutes=push_interval))
+    )
 
     await coordinator.async_refresh()
 
