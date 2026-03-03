@@ -112,6 +112,15 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_PUSH_INTERVAL,
+                    default=opts.get(CONF_PUSH_INTERVAL, 15),
+                ): NumberSelector(NumberSelectorConfig(
+                    min=5,
+                    max=60,
+                    step=5,
+                    mode=NumberSelectorMode.BOX,
+                )),
                 vol.Required(
                     CONF_CHART_COUNT,
                     default=opts.get(CONF_CHART_COUNT, "0"),
@@ -127,15 +136,6 @@ class TrmnlClimateOptionsFlow(config_entries.OptionsFlow):
                     options=chart_hours_options,
                     multiple=False,
                     mode=SelectSelectorMode.LIST,
-                )),
-                vol.Optional(
-                    CONF_PUSH_INTERVAL,
-                    default=opts.get(CONF_PUSH_INTERVAL, 15),
-                ): NumberSelector(NumberSelectorConfig(
-                    min=5,
-                    max=60,
-                    step=5,
-                    mode=NumberSelectorMode.BOX,
                 )),
                 vol.Optional(
                     CONF_CHART1_SENSOR_TYPE,
