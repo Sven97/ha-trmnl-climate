@@ -26,8 +26,8 @@
     <div class="layout layout--col layout--stretch" style="height: calc(100% - 36px);">
 
       {% comment %} Top: combined dual-axis chart {% endcomment %}
-      <div style="flex: 3; padding: 4px 8px 14px; min-height: 0;">
-        <div id="chart-main"></div>
+      <div style="flex: 3; padding: 4px 8px; min-height: 0; display: flex; flex-direction: column;">
+        <div id="chart-main" style="flex: 1; min-height: 0;"></div>
       </div>
 
 {% comment %} Bottom: current sensor values per area {% endcomment %}
@@ -108,7 +108,6 @@
   Highcharts.chart('chart-main', {
     chart: {
       type: 'spline',
-      height: 245,
       animation: false,
       backgroundColor: 'transparent',
       spacing: [10, 10, 5, 10],
