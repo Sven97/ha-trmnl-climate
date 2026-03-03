@@ -93,7 +93,7 @@
     {% endif %}
 
     <div class="title_bar">
-      <span class="instance">last updated at {{ last_updated }}</span>
+      <span class="instance">Updated {{ last_updated }}</span>
     </div>
   </div>
 </div>
@@ -118,8 +118,8 @@
       animation: false,
       backgroundColor: 'transparent',
       spacing: [10, 10, 5, 10],
-      marginLeft: 65,
-      marginRight: 65,
+      marginLeft: 85,
+      marginRight: 85,
       style: { fontFamily: 'inherit' }
     },
     title:   { text: null },
@@ -127,10 +127,11 @@
     tooltip: { enabled: false },
     legend:  {
       enabled: true,
-      verticalAlign: 'top',
-      align: 'center',
+      layout: 'vertical',
+      align: 'right',
+      verticalAlign: 'middle',
       itemStyle: { fontSize: '11px', fontWeight: 'normal', color: '#000' },
-      margin: 4
+      margin: 0
     },
     xAxis: {
       categories: [{% for l in chart.labels %}"{{ l }}"{% unless forloop.last %},{% endunless %}{% endfor %}],
