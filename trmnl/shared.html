@@ -3,17 +3,7 @@
   .item .meta { background: none !important; box-shadow: none !important; }
   .title_bar  { background: none !important; border-top: none !important; }
 
-  /* Values layout */
-  .areas-wrap {
-    display: flex;
-    align-items: center;
-    height: calc(100% - 36px);
-    padding: 0 8px;
-  }
-  .area-col {
-    flex: 1;
-    min-width: 0;
-  }
+  .area-col { min-width: 0; }
   .sensor-icon { font-size: 1.5em; }
 
   /* Narrow slots: wrap into 2 columns, center rows as a group */
@@ -42,42 +32,6 @@
     padding-top: 0 !important;
     padding-bottom: 0 !important;
   }
-
-  /* Gauge layout */
-  .gauge-wrap {
-    display: flex;
-    flex-direction: column;
-    height: calc(100% - 36px);
-    padding: 8px;
-  }
-  .gauge-title {
-    text-align: center;
-    margin-bottom: 4px;
-  }
-  .gauge-row {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-  }
-  .gauge-cell {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 0;
-  }
-  .gauge-dial {
-    flex: 1;
-    width: 100%;
-    min-height: 0;
-  }
-  .gauge-area { text-align: center; }
-
-  /* Line chart layout */
-  .chart-wrap {
-    height: calc(100% - 36px);
-    padding: 8px 8px 0;
-  }
 </style>
 
 {% assign icon_map = 'temperature:mdi-thermometer,humidity:mdi-water-percent,carbon_dioxide:mdi-molecule-co2,pressure:mdi-gauge,pm25:mdi-air-filter,pm10:mdi-air-filter,volatile_organic_compounds:mdi-chemical-weapon,nitrogen_dioxide:mdi-molecule,carbon_monoxide:mdi-molecule-co' | split: ',' %}
@@ -102,9 +56,9 @@
 {% elsif has_chart == false %}
 
 {% comment %} Values mode: single row on wide slots, 2×2 grid on narrow slots {% endcomment %}
-<div class="areas-wrap">
+<div class="areas-wrap layout flex flex--row flex--center-y px--2">
   {% for area in areas %}
-  <div class="area-col">
+  <div class="area-col grow">
     <div class="item">
       <div class="content"><span class="label">{{ area.area }}</span></div>
     </div>
@@ -126,13 +80,13 @@
 {% elsif chart.type == 'gauge' %}
 
 {% comment %} Gauge mode: row of dials {% endcomment %}
-<div class="gauge-wrap">
-  <span class="label gauge-title">{{ chart.title }}</span>
-  <div class="gauge-row">
+<div class="layout flex flex--col p--2">
+  <span class="label text--center mb--1">{{ chart.title }}</span>
+  <div class="flex flex--row grow h--min-0">
     {% for g in chart.gauges %}
-    <div class="gauge-cell">
-      <div id="{{ gauge_prefix }}-{{ forloop.index0 }}" class="gauge-dial"></div>
-      <span class="description gauge-area">{{ g.area }}</span>
+    <div class="grow flex flex--col flex--center-x">
+      <div id="{{ gauge_prefix }}-{{ forloop.index0 }}" class="grow w--full h--min-0"></div>
+      <span class="description text--center">{{ g.area }}</span>
     </div>
     {% endfor %}
   </div>
@@ -141,7 +95,7 @@
 {% else %}
 
 {% comment %} Line chart mode {% endcomment %}
-<div id="{{ chart_id }}" class="chart-wrap"></div>
+<div id="{{ chart_id }}" class="layout p--2 pb--0"></div>
 
 {% endif %}
 
