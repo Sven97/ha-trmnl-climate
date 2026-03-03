@@ -159,19 +159,13 @@
         animation: false,
         backgroundColor: 'transparent',
         spacing: [10, 10, 5, 10],
+        marginRight: 70,
         style: { fontFamily: 'inherit' }
       },
       title:   { text: null },
       credits: { enabled: false },
       tooltip: { enabled: false },
-      legend: {
-        enabled: true,
-        layout: 'horizontal',
-        align: 'center',
-        verticalAlign: 'bottom',
-        itemStyle: { fontSize: '10px', fontWeight: 'normal', color: '#000' },
-        margin: 4
-      },
+      legend:  { enabled: false },
       xAxis: {
         categories: chartData.labels,
         tickInterval: 2,
@@ -193,13 +187,33 @@
           animation: false,
           enableMouseTracking: false,
           states: { hover: { enabled: false } },
-          marker: { enabled: false }
+          marker: { enabled: false },
+          dataLabels: { enabled: false }
         }
       },
       series: chartData.series.map(function(s, i) {
+        var lastIdx = s.data.reduce(function(acc, v, idx) {
+          return v !== null ? idx : acc;
+        }, -1);
+        var pointData = s.data.map(function(v, idx) {
+          if (idx !== lastIdx) return v;
+          return {
+            y: v,
+            dataLabels: {
+              enabled: true,
+              formatter: function() { return s.label; },
+              align: 'left',
+              x: 8,
+              y: 0,
+              crop: false,
+              overflow: 'allow',
+              style: { fontSize: '11px', fontWeight: 'normal', color: '#000', textOutline: 'none' }
+            }
+          };
+        });
         return {
           name: s.label,
-          data: s.data,
+          data: pointData,
           color: COLORS[i % 4],
           lineWidth: WIDTHS[i % 4],
           connectNulls: false
